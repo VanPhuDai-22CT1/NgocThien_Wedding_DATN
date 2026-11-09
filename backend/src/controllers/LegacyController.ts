@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import Joi from 'joi';
 import { Op } from 'sequelize';
 import jwt from 'jsonwebtoken';
+import { sendPasswordResetOtp } from '../utils/mailer';
 import {
   Consultation,
   LiveChatMessage,
@@ -9,6 +10,7 @@ import {
   Order,
   OrderItem,
   Product,
+  ProductReview,
   ShoppingCart,
   User,
 } from '../models';
@@ -109,6 +111,8 @@ class LegacyController {
         customer_email: Joi.string().trim().email().max(160).allow(''),
         user_id: Joi.number().integer().positive().allow(null),
         message: Joi.string().trim().max(2000).required(),
+        message_type: Joi.string().trim().max(40).allow('', null),
+        payload: Joi.object().unknown(true).allow(null),
       }).unknown(false),
       addToCart: Joi.object({
         action: Joi.string().valid(action),
@@ -558,7 +562,23 @@ class LegacyController {
 
   private async getLiveChatSessions(req: Request, res: Response) {
     const rows = await LiveChatSession.findAll({ order: [['updated_at', 'DESC']] });
-    return res.json({ success: true, data: rows });
+    const data = await Promise.all(
+      rows.map(async (session: any) => {
+        const latest = await LiveChatMessage.findOne({
+          where: { chat_session: session.chat_session },
+          order: [['created_at', 'DESC']],
+        });
+
+        return {
+          ...session.toJSON(),
+          latest_message: latest?.message || '',
+          latest_at: latest?.created_at || session.updated_at,
+          unread_count: session.is_read_by_admin ? 0 : 1,
+        };
+      })
+    );
+
+    return res.json({ success: true, data });
   }
 
   private async getLiveChatMessages(req: Request, res: Response) {
@@ -572,6 +592,7 @@ class LegacyController {
     const sender = (req.body as any).sender || (req.body as any).sender_type || 'customer';
     const message = (req.body as any).message || '';
     const sender_name = (req.body as any).customer_name || (req.body as any).sender_name || 'Guest';
+    const isAdminMessage = sender === 'admin';
 
     let session = await LiveChatSession.findOne({ where: { chat_session } });
     if (!session) {
@@ -586,12 +607,15 @@ class LegacyController {
 
     const row = await LiveChatMessage.create({
       chat_session,
-      sender_type: sender === 'admin' ? 'admin' : 'customer',
+      sender_type: isAdminMessage ? 'admin' : 'customer',
       sender_name,
       message,
     });
 
-    await session.update({ updated_at: new Date() });
+    await session.update({
+      updated_at: new Date(),
+      is_read_by_admin: isAdminMessage,
+    });
 
     return res.json({ success: true, chat_session, data: row });
   }
@@ -767,8 +791,46 @@ class LegacyController {
 
   private async deleteUser(req: Request, res: Response) {
     const user_id = (req.body as any).user_id;
-    await User.destroy({ where: { id: user_id } });
-    return res.json({ success: true });
+    const authUserId = (req as any).user?.id;
+
+    if (Number(authUserId) === Number(user_id)) {
+      return res.status(400).json({ success: false, message: 'Không thể xóa tài khoản admin đang đăng nhập' });
+    }
+
+    const user = await User.findByPk(user_id as any);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    if ((user as any).role === 'admin') {
+      const adminCount = await User.count({ where: { role: 'admin' } });
+      if (adminCount <= 1) {
+        return res.status(400).json({ success: false, message: 'Không thể xóa admin cuối cùng' });
+      }
+    }
+
+    const orders = await Order.findAll({ where: { user_id }, attributes: ['id'] });
+    const orderIds = orders.map((order: any) => order.id);
+
+    if (orderIds.length > 0) {
+      await OrderItem.destroy({ where: { order_id: { [Op.in]: orderIds } } });
+      await Order.destroy({ where: { id: { [Op.in]: orderIds } } });
+    }
+
+    const chatSessions = await LiveChatSession.findAll({ where: { user_id }, attributes: ['chat_session'] });
+    const chatSessionIds = chatSessions.map((session: any) => session.chat_session).filter(Boolean);
+
+    if (chatSessionIds.length > 0) {
+      await LiveChatMessage.destroy({ where: { chat_session: { [Op.in]: chatSessionIds } } });
+      await LiveChatSession.destroy({ where: { chat_session: { [Op.in]: chatSessionIds } } });
+    }
+
+    await ShoppingCart.destroy({ where: { user_id } });
+    await Consultation.destroy({ where: { user_id } });
+    await ProductReview.destroy({ where: { user_id } });
+    await user.destroy();
+
+    return res.json({ success: true, message: 'User deleted successfully' });
   }
 
   private async updateUserRole(req: Request, res: Response) {
@@ -866,13 +928,29 @@ class LegacyController {
     }
 
     const otp = String(Math.floor(100000 + Math.random() * 900000));
+
+    try {
+      const mailResult = await sendPasswordResetOtp(email, otp);
+      if (!mailResult.sent) {
+        return res.status(500).json({
+          success: false,
+          message: 'Chưa cấu hình SMTP nên không thể gửi OTP qua Gmail. Vui lòng cấu hình SMTP_HOST, SMTP_USER, SMTP_PASS trong backend/.env.',
+          code: mailResult.reason,
+        });
+      }
+    } catch (error: any) {
+      console.error('Send OTP email error:', error?.message || error);
+      return res.status(502).json({
+        success: false,
+        message: 'Không gửi được OTP qua email. Vui lòng kiểm tra SMTP/Gmail App Password.',
+      });
+    }
+
     this.storePasswordResetRecord(email, otp);
 
     return res.json({
       success: true,
-      message: process.env.NODE_ENV === 'production'
-        ? 'OTP đã được gửi về email'
-        : `OTP tạm thời: ${otp}`,
+      message: 'OTP đã được gửi về email. Vui lòng kiểm tra Hộp thư đến hoặc Spam.',
     });
   }
 

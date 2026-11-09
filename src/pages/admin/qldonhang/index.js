@@ -1,9 +1,5 @@
-import React, { useEffect, useState } from "react";
-import axios from "axios";
-import { apiClient, buildAuthHeaders } from "utils/apiClient";
+import React, { useEffect, useMemo, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
-import { getAuthItem, logoutAuthSession } from "utils/authStorage";
-import { getDarkMode, setDarkModeStorage } from "utils/darkMode";
 import {
   FaArrowLeft,
   FaBell,
@@ -11,43 +7,117 @@ import {
   FaChartPie,
   FaComments,
   FaHistory,
+  FaMoon,
   FaRegCalendarAlt,
   FaShoppingCart,
   FaSignOutAlt,
+  FaSun,
   FaUsers,
-  FaMoon,
-  FaSun
 } from "react-icons/fa";
+import { apiClient, buildAuthHeaders } from "utils/apiClient";
+import { getAuthItem, logoutAuthSession } from "utils/authStorage";
+import { getDarkMode, setDarkModeStorage } from "utils/darkMode";
+import { notify } from "utils/notify";
 import "./style.scss";
 
-const API = `${process.env.REACT_APP_API_URL || "/api"}/legacy`;
+const STATUS_OPTIONS = [
+  { value: "processing", label: "Đang xử lý", className: "processing" },
+  { value: "shipping", label: "Đang giao", className: "shipping" },
+  { value: "delivered", label: "Đã bàn giao sự kiện", className: "received" },
+  { value: "cancelled", label: "Đã hủy", className: "cancelled" },
+];
+
+const LEGACY_STATUS_MAP = {
+  pending: "processing",
+  confirmed: "processing",
+  processing: "processing",
+  shipping: "shipping",
+  delivering: "shipping",
+  delivered: "delivered",
+  completed: "delivered",
+  cancelled: "cancelled",
+  cancel: "cancelled",
+  "dang xu ly": "processing",
+  "dang giao": "shipping",
+  "da giao su kien": "delivered",
+  "da ban giao su kien": "delivered",
+  "da nhan hang": "delivered",
+  "huy don": "cancelled",
+  "da huy": "cancelled",
+};
+
+const stripVietnameseMarks = (value = "") =>
+  String(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D");
+
+const normalizeOrderStatus = (status = "") => {
+  const raw = String(status || "").trim().toLowerCase();
+  const plain = stripVietnameseMarks(raw).toLowerCase();
+  return LEGACY_STATUS_MAP[raw] || LEGACY_STATUS_MAP[plain] || raw || "processing";
+};
+
+const getStatusMeta = (status = "") => {
+  const normalized = normalizeOrderStatus(status);
+  return (
+    STATUS_OPTIONS.find((item) => item.value === normalized) || {
+      value: normalized,
+      label: status || "Không xác định",
+      className: "unknown",
+    }
+  );
+};
+
+const formatMoney = (value) => `${Number(value || 0).toLocaleString("vi-VN")} VNĐ`;
+
+const formatDate = (date) =>
+  date
+    ? new Date(date).toLocaleString("vi-VN", {
+        timeZone: "Asia/Ho_Chi_Minh",
+      })
+    : "-";
+
+const formatPayment = (payment) => {
+  const normalized = String(payment || "").trim().toLowerCase();
+  if (normalized === "cash") return "Tiền mặt";
+  if (["bank", "online", "transfer"].includes(normalized)) return "Chuyển khoản";
+  return normalized ? payment : "Chưa chọn";
+};
 
 export default function OrderManagement() {
   const navigate = useNavigate();
   const role = getAuthItem("role");
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [editingStatusOrderId, setEditingStatusOrderId] = useState(null);
+  const [savingOrderId, setSavingOrderId] = useState(null);
+  const [pendingStatusByOrder, setPendingStatusByOrder] = useState({});
   const [darkMode, setDarkMode] = useState(() => getDarkMode());
 
   useEffect(() => {
     setDarkModeStorage(darkMode);
   }, [darkMode]);
 
-  /* ================= FETCH ================= */
   const fetchOrders = async () => {
     try {
       setLoading(true);
-      const res = await apiClient.get(`/legacy`, { params: { action: "getOrders" }, headers: buildAuthHeaders() });
+      const res = await apiClient.get("/legacy", {
+        params: { action: "getOrders" },
+        headers: buildAuthHeaders(),
+      });
 
-      if (res.data?.success) {
-        setOrders(res.data.orders || []);
-      } else {
-        setOrders([]);
-      }
+      const nextOrders = res.data?.success ? res.data.orders || [] : [];
+      setOrders(nextOrders);
+      setPendingStatusByOrder(
+        Object.fromEntries(
+          nextOrders.map((order) => [order.order_id, normalizeOrderStatus(order.status)])
+        )
+      );
     } catch (err) {
-      console.error(err);
-      alert("Không thể tải đơn hàng");
+      console.error("Load orders error:", err);
+      notify.info("Không thể tải đơn hàng");
+      setOrders([]);
     } finally {
       setLoading(false);
     }
@@ -57,129 +127,75 @@ export default function OrderManagement() {
     fetchOrders();
   }, []);
 
-  /* ================= UPDATE ================= */
-  const updateStatus = async (orderId, status) => {
+  const updateStatus = async (orderId) => {
+    const status = pendingStatusByOrder[orderId];
+    if (!status) return;
+
     try {
-      setLoading(true);
-      await apiClient.post("/legacy", { action: "updateStatus", order_id: orderId, status }, { headers: buildAuthHeaders() });
-      fetchOrders();
+      setSavingOrderId(orderId);
+      const res = await apiClient.post(
+        "/legacy",
+        { action: "updateStatus", order_id: orderId, status },
+        { headers: buildAuthHeaders() }
+      );
+
+      if (res.data?.success) {
+        notify.success("Đã cập nhật trạng thái đơn hàng");
+        await fetchOrders();
+      } else {
+        notify.info(res.data?.message || "Không thể cập nhật trạng thái");
+      }
     } catch (err) {
-      alert("Lỗi cập nhật");
+      console.error("Update order status error:", err);
+      notify.info(err?.response?.data?.message || "Lỗi cập nhật trạng thái");
     } finally {
-      setLoading(false);
+      setSavingOrderId(null);
     }
   };
 
-  /* ================= DELETE ================= */
-const deleteOrder = async (orderId) => {
-  if (!window.confirm("Bạn có chắc muốn xóa?")) return;
+  const deleteOrder = async (orderId) => {
+    if (!(await notify.confirm("Bạn có chắc muốn xóa đơn hàng này?"))) return;
 
-  try {
-    setLoading(true);
+    try {
+      setSavingOrderId(orderId);
+      const res = await apiClient.post(
+        "/legacy",
+        { action: "deleteOrder", order_id: orderId },
+        { headers: buildAuthHeaders() }
+      );
 
-    const res = await apiClient.post("/legacy", { action: "deleteOrder", order_id: orderId }, { headers: buildAuthHeaders() });
-
-    if (res.data?.success) {
-      alert("Đã xóa thành công");
-      fetchOrders();
-    } else {
-      alert(res.data?.message || "Xóa thất bại");
+      if (res.data?.success) {
+        notify.success("Đã xóa đơn hàng");
+        await fetchOrders();
+      } else {
+        notify.info(res.data?.message || "Xóa thất bại");
+      }
+    } catch (err) {
+      console.error("Delete order error:", err);
+      notify.info(err?.response?.data?.message || "Lỗi khi xóa đơn hàng");
+    } finally {
+      setSavingOrderId(null);
     }
-
-  } catch (err) {
-    console.error(err);
-    alert("Lỗi khi xóa");
-  } finally {
-    setLoading(false);
-  }
-};
-
-  const logout = () => {
-    logoutAuthSession("/");
   };
 
-  const formatMoney = (value) =>
-    Number(value).toLocaleString("vi-VN") + " VNĐ";
-
-  const formatDate = (date) =>
-    date
-      ? new Date(date).toLocaleString("vi-VN", {
-          timeZone: "Asia/Ho_Chi_Minh",
-        })
-      : "-";
-
-  const formatPayment = (payment) => {
-    const normalized = String(payment || "").trim().toLowerCase();
-    if (normalized === "cash") return "Tiền mặt";
-    if (normalized === "bank") return "Chuyển khoản";
-    if (!normalized) return "Chưa chọn";
-    return payment;
-  };
-
-  const getStatusMeta = (status = "") => {
-    const normalized = String(status).trim().toLowerCase();
-
-    if (normalized === "đang xử lý") {
-      return { label: "Đang xử lý", className: "processing" };
-    }
-
-    if (normalized === "đang giao") {
-      return { label: "Đang giao", className: "shipping" };
-    }
-
-    if (
-      normalized === "đã nhận hàng" ||
-      normalized === "đã giao sự kiện" ||
-      normalized === "đã bàn giao sự kiện"
-    ) {
-      return { label: "Đã bàn giao sự kiện", className: "received" };
-    }
-
-    if (normalized === "cancelled" || normalized === "hủy đơn" || normalized === "huy don" || normalized === "đã hủy") {
-      return { label: "Đã hủy", className: "cancelled" };
-    }
-
-    if (normalized === "đã xác nhận") {
-      return { label: "Đang xử lý", className: "processing" };
-    }
-
-    return { label: status || "Không xác định", className: "unknown" };
-  };
-
-  const getSelectStatusValue = (status = "") => {
-    const normalized = String(status).trim().toLowerCase();
-
-    if (normalized === "đã nhận hàng" || normalized === "da nhan hang") {
-      return "Đã bàn giao sự kiện";
-    }
-
-    if (normalized === "đã giao sự kiện" || normalized === "da giao su kien") {
-      return "Đã bàn giao sự kiện";
-    }
-
-    return status;
-  };
-
-  const isCompletedStatus = (status = "") => {
-    const normalized = String(status).trim().toLowerCase();
-    return (
-      normalized === "đã giao sự kiện" ||
-      normalized === "da giao su kien" ||
-      normalized === "đã bàn giao sự kiện" ||
-      normalized === "da ban giao su kien" ||
-      normalized === "đã nhận hàng" ||
-      normalized === "da nhan hang"
+  const totals = useMemo(() => {
+    return orders.reduce(
+      (acc, order) => {
+        const status = normalizeOrderStatus(order.status);
+        acc.total += 1;
+        acc.revenue += Number(order.total || 0);
+        acc[status] = (acc[status] || 0) + 1;
+        return acc;
+      },
+      { total: 0, revenue: 0, processing: 0, shipping: 0, delivered: 0, cancelled: 0 }
     );
-  };
+  }, [orders]);
 
-  /* ================= RENDER ================= */
   return (
     <div className={`admin-layout ${darkMode ? "dark" : ""}`}>
-
-      {/* SIDEBAR */}
       <aside className="sidebar">
         <div className="logo">
-          <h1>NGỌC THIỆN ADMIN</h1>
+          <h1>NGỌC THIÊN ADMIN</h1>
         </div>
 
         <nav className="sidebar-nav">
@@ -216,139 +232,183 @@ const deleteOrder = async (orderId) => {
           <NavLink to="/qlhoatdong">
             <FaHistory /> Lịch sử
           </NavLink>
-
         </nav>
 
         <div className="sidebar-footer">
-          <button onClick={logout} className="logout-btn">
+          <button onClick={() => logoutAuthSession("/")} className="logout-btn">
             <FaSignOutAlt /> Đăng xuất
           </button>
         </div>
       </aside>
 
-      {/* CONTENT */}
-      <div className="admin-content">
-
+      <main className="admin-content">
         <div className="admin-header">
           <div>
             <h2>
               <FaShoppingCart /> Quản lý đơn hàng
             </h2>
-            <p className="subtitle">Theo dõi và cập nhật trạng thái đơn hàng của khách</p>
+            <p className="subtitle">
+              Theo dõi đơn đặt dịch vụ, xem chi tiết và cập nhật trạng thái xử lý cho khách.
+            </p>
           </div>
 
-          <div style={{ display: "flex", gap: "10px" }}>
+          <div className="header-actions">
             <button
               className="dark-toggle"
               onClick={() => setDarkMode(!darkMode)}
               title="Chế độ tối"
+              type="button"
             >
               {darkMode ? <FaSun /> : <FaMoon />}
             </button>
-            <button
-              className="btn-back"
-              onClick={() => navigate("/dashboard")}
-            >
+            <button className="btn-back" onClick={() => navigate("/dashboard")} type="button">
               <FaArrowLeft /> Quay lại
             </button>
           </div>
         </div>
 
+        <div className="order-summary">
+          <div>
+            <span>Tổng đơn</span>
+            <b>{totals.total}</b>
+          </div>
+          <div>
+            <span>Đang xử lý</span>
+            <b>{totals.processing}</b>
+          </div>
+          <div>
+            <span>Đang giao</span>
+            <b>{totals.shipping}</b>
+          </div>
+          <div>
+            <span>Hoàn tất</span>
+            <b>{totals.delivered}</b>
+          </div>
+          <div>
+            <span>Doanh thu</span>
+            <b>{formatMoney(totals.revenue)}</b>
+          </div>
+        </div>
+
         <div className="card">
           {loading ? (
-            <div className="loading">Đang tải...</div>
+            <div className="loading">Đang tải đơn hàng...</div>
+          ) : orders.length === 0 ? (
+            <div className="empty">Không có đơn hàng</div>
           ) : (
             <div className="orders-scroll">
-              {orders.length === 0 ? (
-                <div className="empty">Không có đơn hàng</div>
-              ) : (
-                orders.map((order) => {
-                  const statusMeta = getStatusMeta(order.status);
-                  const completedStatus = isCompletedStatus(order.status);
-                  const canEditStatus = !completedStatus || editingStatusOrderId === order.order_id;
+              {orders.map((order) => {
+                const statusMeta = getStatusMeta(order.status);
+                const selectedStatus =
+                  pendingStatusByOrder[order.order_id] || normalizeOrderStatus(order.status);
+                const isDirty = selectedStatus !== normalizeOrderStatus(order.status);
+                const isSaving = savingOrderId === order.order_id;
+                const details = Array.isArray(order.details) ? order.details : [];
 
-                  return (
-                    <div className="order-card" key={order.order_id}>
-                      <div className="order-card__top">
-                        <div className="order-card__title">
-                          <span className="id-badge">#{order.order_id}</span>
-                          <span className={`status-badge ${statusMeta.className}`}>
-                            {statusMeta.label}
-                          </span>
-                        </div>
-                        <span className="money">{formatMoney(order.total)}</span>
+                return (
+                  <article className="order-card" key={order.order_id}>
+                    <div className="order-card__top">
+                      <div className="order-card__title">
+                        <span className="id-badge">#{order.order_id}</span>
+                        <span className={`status-badge ${statusMeta.className}`}>
+                          {statusMeta.label}
+                        </span>
                       </div>
+                      <span className="money">{formatMoney(order.total)}</span>
+                    </div>
 
-                      <div className="order-card__meta">
-                        <div>
-                          <span>Ngày đặt</span>
-                          <b>{formatDate(order.created_at)}</b>
-                        </div>
-                        <div>
-                          <span>Cập nhật</span>
-                          <b>{formatDate(order.updated_at)}</b>
-                        </div>
+                    <div className="order-card__meta">
+                      <div>
+                        <span>Ngày đặt</span>
+                        <b>{formatDate(order.created_at)}</b>
                       </div>
-
-                      <div className="order-card__customer">
-                        <p><span>Khách hàng:</span> <b>{order.customer_name || "Khách lẻ"}</b></p>
-                        <p><span>Số điện thoại:</span> <b>{order.phone || "-"}</b></p>
-                        <p><span>Thanh toán:</span> <b>{formatPayment(order.payment_method)}</b></p>
-                        {order.note ? (
-                          <p className="note-line" title={order.note}>
-                            <span>Ghi chú:</span> <b>{order.note}</b>
-                          </p>
-                        ) : null}
-                      </div>
-
-                      <div className="order-card__actions">
-                        {canEditStatus ? (
-                          <div className="order-status">
-                            <span>Đổi trạng thái</span>
-                            <select
-                              value={getSelectStatusValue(order.status)}
-                              onChange={(e) => {
-                                updateStatus(order.order_id, e.target.value);
-                                setEditingStatusOrderId(null);
-                              }}
-                            >
-                              <option value="Đang xử lý">Đang xử lý</option>
-                              <option value="Đang giao">Đang giao</option>
-                              <option value="Đã bàn giao sự kiện">Đã bàn giao sự kiện</option>
-                              <option value="Hủy đơn">Hủy đơn</option>
-                            </select>
-                          </div>
-                        ) : (
-                          <button
-                            className="btn-edit-status"
-                            onClick={() => setEditingStatusOrderId(order.order_id)}
-                          >
-                            Chỉnh sửa
-                          </button>
-                        )}
-
-                        <button
-                          className="btn-delete"
-                          onClick={() => deleteOrder(order.order_id)}
-                          disabled={[
-                            "cancelled",
-                            "hủy đơn",
-                            "huy don",
-                            "đã hủy"
-                          ].includes(String(order.status).toLowerCase())}
-                        >
-                          Xóa
-                        </button>
+                      <div>
+                        <span>Cập nhật</span>
+                        <b>{formatDate(order.updated_at)}</b>
                       </div>
                     </div>
-                  );
-                })
-              )}
+
+                    <div className="order-card__customer">
+                      <p>
+                        <span>Khách hàng:</span>
+                        <b>{order.customer_name || "Khách lẻ"}</b>
+                      </p>
+                      <p>
+                        <span>Số điện thoại:</span>
+                        <b>{order.phone || "-"}</b>
+                      </p>
+                      <p>
+                        <span>Thanh toán:</span>
+                        <b>{formatPayment(order.payment_method)}</b>
+                      </p>
+                      {order.note ? (
+                        <p className="note-line" title={order.note}>
+                          <span>Ghi chú:</span>
+                          <b>{order.note}</b>
+                        </p>
+                      ) : null}
+                    </div>
+
+                    {details.length > 0 && (
+                      <div className="order-card__details">
+                        <span>Dịch vụ</span>
+                        {details.map((item, index) => (
+                          <p key={`${order.order_id}-${index}`}>
+                            <b>{item.product_name || "Dịch vụ"}</b>
+                            <em>
+                              x{item.quantity || 1} - {formatMoney(item.product_price)}
+                            </em>
+                          </p>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="order-card__actions">
+                      <div className="order-status">
+                        <span>Đổi trạng thái</span>
+                        <select
+                          value={selectedStatus}
+                          onChange={(e) =>
+                            setPendingStatusByOrder((prev) => ({
+                              ...prev,
+                              [order.order_id]: e.target.value,
+                            }))
+                          }
+                          disabled={isSaving}
+                        >
+                          {STATUS_OPTIONS.map((status) => (
+                            <option key={status.value} value={status.value}>
+                              {status.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <button
+                        className="btn-save-status"
+                        type="button"
+                        onClick={() => updateStatus(order.order_id)}
+                        disabled={!isDirty || isSaving}
+                      >
+                        {isSaving ? "Đang lưu..." : "Lưu trạng thái"}
+                      </button>
+
+                      <button
+                        className="btn-delete"
+                        type="button"
+                        onClick={() => deleteOrder(order.order_id)}
+                        disabled={isSaving || normalizeOrderStatus(order.status) === "cancelled"}
+                      >
+                        Xóa
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
             </div>
           )}
         </div>
-
-      </div>
+      </main>
     </div>
   );
 }

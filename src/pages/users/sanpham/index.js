@@ -7,6 +7,7 @@ import { addGuestCartItem } from "utils/guestCart";
 import { apiClient, buildAuthHeaders } from "utils/apiClient";
 import { getImageUrl, getProductImage } from "../../../utils/image";
 import "./style.scss";
+import { notify } from "utils/notify";
 
 const normalizeText = (value) =>
   String(value || "")
@@ -174,8 +175,17 @@ const ProductList = () => {
     const fetchProducts = async () => {
       try {
         setLoading(true);
-        const response = await apiClient.get("/products");
-        setProducts(response.data?.data || []);
+        // Use the same complete catalog endpoint as the home page and admin.
+        // /products applies pagination (20 items by default), which can hide
+        // older products when a category is selected.
+        const response = await apiClient.get("/legacy", {
+          params: { action: "getProducts" },
+        });
+        setProducts(
+          response.data?.success && Array.isArray(response.data.data)
+            ? response.data.data
+            : []
+        );
       } catch (error) {
         console.error("Load products error:", error);
         setProducts([]);
@@ -203,7 +213,7 @@ const ProductList = () => {
         },
         Number(quantity || 1)
       );
-      alert("Đã thêm vào giỏ hàng");
+      notify.info("Đã thêm vào giỏ hàng");
       return;
     }
 
@@ -219,13 +229,13 @@ const ProductList = () => {
       );
 
       if (response.data?.success) {
-        alert("Đã thêm vào giỏ hàng");
+        notify.info("Đã thêm vào giỏ hàng");
       } else {
-        alert(response.data?.message || "Thêm dịch vụ thất bại");
+        notify.info(response.data?.message || "Thêm dịch vụ thất bại");
       }
     } catch (error) {
       console.error("Add to cart error:", error);
-      alert("Có lỗi xảy ra khi thêm dịch vụ vào giỏ hàng");
+      notify.info("Có lỗi xảy ra khi thêm dịch vụ vào giỏ hàng");
     }
   };
 

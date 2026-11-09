@@ -5,6 +5,7 @@ import { getAuthItem } from "utils/authStorage";
 import { getGuestCart, removeGuestCartItem } from "utils/guestCart";
 import { apiClient, buildAuthHeaders } from "utils/apiClient";
 import "./style.scss";
+import { notify } from "utils/notify";
 const VAT_RATE = 0.1;
 
 const Cart = () => {
@@ -66,7 +67,7 @@ const Cart = () => {
       if (res.data?.success) {
         fetchCart();
       } else {
-        alert("Xóa thất bại!");
+        notify.info("Xóa thất bại!");
       }
     } catch (err) {
       console.error("Remove error:", err);

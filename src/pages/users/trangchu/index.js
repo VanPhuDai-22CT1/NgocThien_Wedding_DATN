@@ -18,6 +18,7 @@ import {
 } from "react-icons/fa";
 import "./style.scss";
 import useScrollReveal from "../../../hooks/useScrollReveal";
+import { notify } from "utils/notify";
 
 
 // ===== IMPORT ẢNH KHOẢNH KHẮC =====
@@ -130,22 +131,22 @@ const HomePage = () => {
   e.preventDefault();
 
   if (!consultData.agree) {
-    alert("Bạn cần đồng ý điều khoản");
+    notify.info("Bạn cần đồng ý điều khoản");
     return;
   }
 
   if (!consultData.date) {
-    alert("Vui lòng chọn ngày tổ chức tiệc");
+    notify.info("Vui lòng chọn ngày tổ chức tiệc");
     return;
   }
 
   if (consultData.date < minEventDate) {
-    alert("Ngày đặt tiệc phải cách ngày hiện tại ít nhất 2 ngày.");
+    notify.info("Ngày đặt tiệc phải cách ngày hiện tại ít nhất 2 ngày.");
     return;
   }
 
   if (bookedDateSet.has(consultData.date)) {
-    alert("Ngày này đã có tiệc, vui lòng chọn ngày khác");
+    notify.info("Ngày này đã có tiệc, vui lòng chọn ngày khác");
     return;
   }
 
@@ -166,17 +167,17 @@ const HomePage = () => {
     );
 
     if (res.data.success) {
-      alert("Gửi thông tin thành công!");
+      notify.info("Gửi thông tin thành công!");
       const bookedRes = await axios.get(`${API_BASE}/legacy?action=getBookedEventDates`);
       if (bookedRes.data?.success) {
         setBookedDates((bookedRes.data.data || []).map((item) => item.event_date));
       }
     } else {
-      alert(res.data?.message || "Gửi thất bại!");
+      notify.info(res.data?.message || "Gửi thất bại!");
     }
 
   } catch (error) {
-    alert("Lỗi kết nối server!");
+    notify.info("Lỗi kết nối server!");
   }
 
   setConsultData({
@@ -333,7 +334,7 @@ const addToCart = (productId) => {
       price: Number(selectedProduct?.price || 0),
       cover: getProductImage(selectedProduct),
     });
-    alert("Đã thêm sản phẩm vào giỏ hàng");
+    notify.info("Đã thêm sản phẩm vào giỏ hàng");
     return;
   }
 
@@ -350,12 +351,12 @@ const addToCart = (productId) => {
     )
     .then((res) => {
       if (res.data.success) {
-        alert("Đã thêm sản phẩm vào giỏ hàng");
+        notify.info("Đã thêm sản phẩm vào giỏ hàng");
       } else {
-        alert(res.data.message || "Thêm giỏ hàng thất bại");
+        notify.info(res.data.message || "Thêm giỏ hàng thất bại");
       }
     })
-    .catch(() => alert("Lỗi thêm giỏ hàng"));
+    .catch(() => notify.info("Lỗi thêm giỏ hàng"));
 };
 
 

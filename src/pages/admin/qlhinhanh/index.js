@@ -29,6 +29,7 @@ import nen1 from "assets/users/images/hero/nen1.jpg";
 import nen2 from "assets/users/images/hero/nen2.jpg";
 import nen3 from "assets/users/images/hero/nen3.jpg";
 import heroBgDefault from "assets/users/images/hero/nennen.jpg";
+import { notify } from "utils/notify";
 
 const HomeImageManagement = () => {
   const role = getAuthItem("role");
@@ -139,7 +140,7 @@ const HomeImageManagement = () => {
       }
     } catch (error) {
       console.error(error);
-      alert("Không tải được cấu hình ảnh trang chủ");
+      notify.info("Không tải được cấu hình ảnh trang chủ");
     } finally {
       setLoading(false);
     }
@@ -268,7 +269,7 @@ const HomeImageManagement = () => {
       Boolean(pathOverrides.heroBackground);
 
     if (!hasFile && !hasPathOverride) {
-      alert("Bạn chưa chọn ảnh nào để cập nhật");
+      notify.info("Bạn chưa chọn ảnh nào để cập nhật");
       return;
     }
 
@@ -322,7 +323,7 @@ const HomeImageManagement = () => {
       );
 
       if (res.data?.success) {
-        alert("Cập nhật ảnh trang chủ thành công");
+        notify.info("Cập nhật ảnh trang chủ thành công");
         setFiles({
           gallery: Array(7).fill(null),
           consult: null,
@@ -343,11 +344,11 @@ const HomeImageManagement = () => {
         });
         loadConfig();
       } else {
-        alert(res.data?.message || "Cập nhật thất bại");
+        notify.info(res.data?.message || "Cập nhật thất bại");
       }
     } catch (error) {
       console.error(error);
-      alert("Lỗi khi cập nhật ảnh trang chủ");
+      notify.info("Lỗi khi cập nhật ảnh trang chủ");
     } finally {
       setSaving(false);
     }

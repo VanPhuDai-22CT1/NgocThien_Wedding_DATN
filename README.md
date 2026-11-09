@@ -1,106 +1,64 @@
-# NgocThien_Wedding
+# NgocThien Wedding
 
-This repository contains the frontend and backend of the Ngọc Thiện Wedding project.
+Website đặt dịch vụ cưới gồm giao diện khách hàng, giao diện quản trị và API backend.
 
-Quick start (local):
+## Công nghệ
 
-1. Copy environment file and edit local settings:
+- Frontend: React, React Router, SCSS
+- Backend: Node.js, Express, TypeScript, Sequelize
+- Cơ sở dữ liệu: MySQL
 
-```powershell
-copy .env.example .env
-# Edit .env to set DB credentials and PORT
+## Chạy local hoặc GitHub Codespaces
+
+Yêu cầu: Node.js 18 trở lên, npm và MySQL 8 trở lên.
+
+1. Tạo file cấu hình từ mẫu:
+
+   ```sh
+   cp .env.example .env
+   cp backend/.env.sample backend/.env
+   ```
+
+2. Điền thông tin MySQL vào `.env` (và SMTP nếu cần gửi email OTP). Không commit các file `.env` hoặc thông tin đăng nhập thật.
+
+3. Cài dependencies và khởi tạo cơ sở dữ liệu:
+
+   ```sh
+   npm install
+   npm install --prefix backend
+   npm --prefix backend run init-db
+   ```
+
+4. Mở hai terminal để chạy frontend khách hàng, quản trị và backend:
+
+   ```sh
+   npm run start:user
+   ```
+
+   ```sh
+   npm run start:admin
+   ```
+
+   ```sh
+   npm --prefix backend run dev
+   ```
+
+Frontend khách hàng chạy ở `http://localhost:3000`, trang quản trị ở `http://localhost:3001`, API ở `http://localhost:5000`.
+
+## Các nhánh
+
+- `main`: nhánh chính
+- `user`: giao diện và chức năng khách hàng
+- `admin`: giao diện và chức năng quản trị
+- `submission-2026-06-20`: nhánh snapshot nộp mã nguồn hiện tại
+
+## Build
+
+```sh
+npm run build
+npm --prefix backend run build
 ```
 
-2. Initialize database (local MySQL must be running):
+## Cấu hình
 
-```powershell
-cd backend
-npm install
-npm run init-db
-```
-
-3. Start backend (development):
-
-```powershell
-npm --prefix backend run dev
-```
-
-4. Start frontend (if using the repo `src`):
-
-```powershell
-npm install
-npm start
-```
-
-Notes
-- The `clean-main` branch was created to avoid pushing `node_modules` and large cache files. Create a pull request from `clean-main` → `main` on GitHub and merge there.
-# Getting Started with Create React App
-
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
-
-## Available Scripts
-
-In the project directory, you can run:
-
-### `npm start`
-
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
-
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
-
-### `npm test`
-
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
-
-### `npm run build`
-
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
-
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
-
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
-
-### `npm run eject`
-
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
-
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
-
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
-
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+Các mẫu cấu hình nằm trong `.env.example` và `backend/.env.sample`. Hãy thay `JWT_SECRET`, thông tin cơ sở dữ liệu và SMTP bằng giá trị riêng của môi trường trước khi triển khai. Không sử dụng cấu hình mặc định cho môi trường production.

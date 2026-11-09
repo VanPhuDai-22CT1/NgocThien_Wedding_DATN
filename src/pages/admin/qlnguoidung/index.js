@@ -18,6 +18,7 @@ import {
 import { apiClient, buildAuthHeaders } from "utils/apiClient";
 import { getAuthItem, logoutAuthSession, setAuthItem } from "utils/authStorage";
 import "./style.scss";
+import { notify } from "utils/notify";
 
 const emptyUserForm = {
   username: "",
@@ -51,6 +52,8 @@ const UserManagement = () => {
   const [errorMessage, setErrorMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deletingUserId, setDeletingUserId] = useState(null);
+  const [pendingDeleteUser, setPendingDeleteUser] = useState(null);
 
   useEffect(() => {
     const storedRole = getAuthItem("role");
@@ -93,10 +96,31 @@ const UserManagement = () => {
     syncCurrentAuthUser(updatedUser);
   };
 
-  const handleDeleteUser = async (userId) => {
-    if (!window.confirm("Bạn có chắc muốn xóa người dùng này?")) return;
+  const openDeleteModal = (user) => {
+    if (String(getAuthItem("user_id")) === String(user.id)) {
+      notify.info("Không thể xóa tài khoản đang đăng nhập");
+      return;
+    }
+
+    setPendingDeleteUser(user);
+  };
+
+  const closeDeleteModal = () => {
+    if (deletingUserId) return;
+    setPendingDeleteUser(null);
+  };
+
+  const handleDeleteUser = async () => {
+    const userId = pendingDeleteUser?.id;
+    if (!userId) return;
+
+    if (String(getAuthItem("user_id")) === String(userId)) {
+      notify.info("Không thể xóa tài khoản đang đăng nhập");
+      return;
+    }
 
     try {
+      setDeletingUserId(userId);
       const res = await apiClient.post(
         "/legacy",
         { action: "deleteUser", user_id: userId },
@@ -105,12 +129,16 @@ const UserManagement = () => {
 
       if (res.data?.success) {
         setUsers((prev) => prev.filter((user) => user.id !== userId));
+        setPendingDeleteUser(null);
+        notify.success("Đã xóa người dùng");
       } else {
-        alert(res.data?.message || "Lỗi khi xóa người dùng");
+        notify.info(res.data?.message || "Lỗi khi xóa người dùng");
       }
     } catch (err) {
       console.error("Delete user error:", err);
-      alert(err?.response?.data?.message || "Lỗi khi xóa người dùng");
+      notify.info(err?.response?.data?.message || "Lỗi khi xóa người dùng");
+    } finally {
+      setDeletingUserId(null);
     }
   };
 
@@ -127,11 +155,11 @@ const UserManagement = () => {
       if (res.data?.success) {
         mergeUpdatedUser(res.data.data || { id: userId, role: normalizedRole });
       } else {
-        alert(res.data?.message || "Lỗi khi cập nhật vai trò");
+        notify.info(res.data?.message || "Lỗi khi cập nhật vai trò");
       }
     } catch (err) {
       console.error("Update role error:", err);
-      alert(err?.response?.data?.message || "Lỗi khi cập nhật vai trò");
+      notify.info(err?.response?.data?.message || "Lỗi khi cập nhật vai trò");
     }
   };
 
@@ -154,7 +182,7 @@ const UserManagement = () => {
     if (!selectedUser || saving) return;
 
     if (!updatedInfo.username.trim() || !updatedInfo.email.trim()) {
-      alert("Vui lòng nhập tên đăng nhập và email");
+      notify.info("Vui lòng nhập tên đăng nhập và email");
       return;
     }
 
@@ -181,11 +209,11 @@ const UserManagement = () => {
         mergeUpdatedUser(res.data.data || { ...selectedUser, ...updatedInfo, password: undefined });
         closeEditModal();
       } else {
-        alert(res.data?.message || "Lỗi khi cập nhật");
+        notify.info(res.data?.message || "Lỗi khi cập nhật");
       }
     } catch (err) {
       console.error("Update user info error:", err);
-      alert(err?.response?.data?.message || "Lỗi khi cập nhật");
+      notify.info(err?.response?.data?.message || "Lỗi khi cập nhật");
     } finally {
       setSaving(false);
     }
@@ -277,8 +305,13 @@ const UserManagement = () => {
                         <button className="edit-btn" onClick={() => openEditModal(user)} title="Chỉnh sửa">
                           <FaEdit />
                         </button>
-                        <button className="delete-btn" onClick={() => handleDeleteUser(user.id)} title="Xóa">
-                          <FaTrash />
+                        <button
+                          className="delete-btn"
+                          onClick={() => openDeleteModal(user)}
+                          title="Xóa"
+                          disabled={deletingUserId === user.id}
+                        >
+                          {deletingUserId === user.id ? "..." : <FaTrash />}
                         </button>
                       </div>
                     </div>
@@ -370,6 +403,44 @@ const UserManagement = () => {
                 </button>
                 <button className="cancel-btn" disabled={saving} onClick={closeEditModal}>
                   Hủy
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {pendingDeleteUser && (
+          <div className="modal-overlay system-modal-overlay">
+            <div className="system-modal-box">
+              <div className="system-modal-icon">
+                <FaTrash />
+              </div>
+              <div className="system-modal-content">
+                <span className="system-modal-kicker">Thông báo hệ thống</span>
+                <h3>Xóa người dùng?</h3>
+                <p>
+                  Bạn đang chuẩn bị xóa tài khoản{" "}
+                  <b>{getDisplayName(pendingDeleteUser)}</b>. Dữ liệu đơn hàng, giỏ hàng,
+                  lịch tư vấn và chat liên quan cũng sẽ bị xóa.
+                </p>
+              </div>
+
+              <div className="system-modal-actions">
+                <button
+                  type="button"
+                  className="system-cancel-btn"
+                  onClick={closeDeleteModal}
+                  disabled={Boolean(deletingUserId)}
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  className="system-danger-btn"
+                  onClick={handleDeleteUser}
+                  disabled={Boolean(deletingUserId)}
+                >
+                  {deletingUserId ? "Đang xóa..." : "Xóa người dùng"}
                 </button>
               </div>
             </div>

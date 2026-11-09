@@ -1,9 +1,5 @@
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
-import axios from "axios";
-import { apiClient, buildAuthHeaders } from "utils/apiClient";
-import { getAuthItem } from "utils/authStorage";
-import { getImageUrl } from "utils/image";
 import {
   FaArrowLeft,
   FaBell,
@@ -17,9 +13,10 @@ import {
   FaShoppingCart,
   FaUsers,
 } from "react-icons/fa";
+import { apiClient, buildAuthHeaders } from "utils/apiClient";
+import { getAuthItem } from "utils/authStorage";
+import { notify } from "utils/notify";
 import "./style.scss";
-
-const API = `${process.env.REACT_APP_API_URL || "/api"}/legacy`;
 
 const normalizeText = (value = "") =>
   value
@@ -40,30 +37,31 @@ export default function AdminChat() {
   const [keyword, setKeyword] = useState("");
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [sending, setSending] = useState(false);
   const [products, setProducts] = useState([]);
   const [selectedProductId, setSelectedProductId] = useState("");
 
   const loadSessions = useCallback(async () => {
     try {
       setLoadingSessions(true);
-      const res = await apiClient.get(`/legacy`, { params: { action: "getLiveChatSessions", _: Date.now() }, headers: buildAuthHeaders() });
+      const res = await apiClient.get("/legacy", {
+        params: { action: "getLiveChatSessions", _: Date.now() },
+        headers: buildAuthHeaders(),
+      });
       const rows = res.data?.success && Array.isArray(res.data.data) ? res.data.data : [];
       setSessions(rows);
 
-      if (!selectedSession && rows.length > 0) {
-        setSelectedSession(rows[0].chat_session);
-      }
-
-      if (selectedSession && !rows.some((item) => item.chat_session === selectedSession)) {
-        setSelectedSession(rows[0]?.chat_session || "");
-      }
+      setSelectedSession((current) => {
+        if (current && rows.some((item) => item.chat_session === current)) return current;
+        return rows[0]?.chat_session || "";
+      });
     } catch (error) {
       console.error("Load live sessions error:", error);
       setSessions([]);
     } finally {
       setLoadingSessions(false);
     }
-  }, [selectedSession]);
+  }, []);
 
   const loadMessages = useCallback(async (sessionId) => {
     if (!sessionId) {
@@ -73,15 +71,17 @@ export default function AdminChat() {
 
     try {
       setLoadingMessages(true);
-      const res = await apiClient.get(`/legacy`, { params: { action: "getLiveChatMessages", chat_session: sessionId, _: Date.now() }, headers: buildAuthHeaders() });
+      const res = await apiClient.get("/legacy", {
+        params: { action: "getLiveChatMessages", chat_session: sessionId, _: Date.now() },
+        headers: buildAuthHeaders(),
+      });
 
-      if (res.data?.success) {
-        setMessages(Array.isArray(res.data.data) ? res.data.data : []);
-      } else {
-        setMessages([]);
-      }
-
-      await apiClient.post(`/legacy`, { action: "markLiveChatRead", chat_session: sessionId }, { headers: buildAuthHeaders() });
+      setMessages(res.data?.success && Array.isArray(res.data.data) ? res.data.data : []);
+      await apiClient.post(
+        "/legacy",
+        { action: "markLiveChatRead", chat_session: sessionId },
+        { headers: buildAuthHeaders() }
+      );
     } catch (error) {
       console.error("Load live messages error:", error);
       setMessages([]);
@@ -92,9 +92,11 @@ export default function AdminChat() {
 
   const loadProducts = useCallback(async () => {
     try {
-      const res = await apiClient.get(`/legacy`, { params: { action: "getProducts", _: Date.now() }, headers: buildAuthHeaders() });
-      const rows = res.data?.success && Array.isArray(res.data.data) ? res.data.data : [];
-      setProducts(rows);
+      const res = await apiClient.get("/legacy", {
+        params: { action: "getProducts", _: Date.now() },
+        headers: buildAuthHeaders(),
+      });
+      setProducts(res.data?.success && Array.isArray(res.data.data) ? res.data.data : []);
     } catch (error) {
       console.error("Load products for chat error:", error);
       setProducts([]);
@@ -103,23 +105,17 @@ export default function AdminChat() {
 
   useEffect(() => {
     loadSessions();
-  }, [loadSessions]);
-
-  useEffect(() => {
     loadProducts();
-  }, [loadProducts]);
+  }, [loadProducts, loadSessions]);
 
   useEffect(() => {
-    if (!selectedSession) return;
     loadMessages(selectedSession);
   }, [selectedSession, loadMessages]);
 
   useEffect(() => {
     const intervalId = setInterval(() => {
       loadSessions();
-      if (selectedSession) {
-        loadMessages(selectedSession);
-      }
+      if (selectedSession) loadMessages(selectedSession);
     }, 3000);
 
     return () => clearInterval(intervalId);
@@ -129,12 +125,11 @@ export default function AdminChat() {
     const key = normalizeText(keyword);
     if (!key) return sessions;
 
-    return sessions.filter((item) => {
-      const searchText = normalizeText(
+    return sessions.filter((item) =>
+      normalizeText(
         `${item.chat_session || ""} ${item.customer_name || ""} ${item.customer_email || ""} ${item.latest_message || ""}`
-      );
-      return searchText.includes(key);
-    });
+      ).includes(key)
+    );
   }, [sessions, keyword]);
 
   const activeSessionInfo = useMemo(
@@ -142,58 +137,63 @@ export default function AdminChat() {
     [sessions, selectedSession]
   );
 
-  const handleSendReply = async () => {
-    const content = String(reply || "").trim();
-    if (!content || !selectedSession) return;
+  const sendMessage = async (message) => {
+    const content = String(message || "").trim();
+    if (!content || !selectedSession || sending) return;
 
     try {
-      await apiClient.post(`/legacy`, { action: "sendLiveChatMessage", chat_session: selectedSession, sender: "admin", message: content, customer_name: activeSessionInfo?.customer_name || "Khách hàng", customer_email: activeSessionInfo?.customer_email || "" }, { headers: buildAuthHeaders() });
+      setSending(true);
+      await apiClient.post(
+        "/legacy",
+        {
+          action: "sendLiveChatMessage",
+          chat_session: selectedSession,
+          sender: "admin",
+          message: content,
+          customer_name: activeSessionInfo?.customer_name || "Khách hàng",
+          customer_email: activeSessionInfo?.customer_email || "",
+        },
+        { headers: buildAuthHeaders() }
+      );
 
       setReply("");
       await loadMessages(selectedSession);
       await loadSessions();
     } catch (error) {
-      console.error("Send admin reply error:", error);
-      alert("Không thể gửi phản hồi cho khách hàng");
+      console.error("Send admin message error:", error);
+      notify.info("Không thể gửi phản hồi cho khách hàng");
+    } finally {
+      setSending(false);
     }
   };
 
+  const handleSendReply = () => sendMessage(reply);
+
   const handleSendProduct = async () => {
-    if (!selectedSession || !selectedProductId) return;
+    if (!selectedProductId) return;
 
-    const selectedProduct = products.find(
-      (item) => String(item.id) === String(selectedProductId)
-    );
-
+    const selectedProduct = products.find((item) => String(item.id) === String(selectedProductId));
     if (!selectedProduct) {
-      alert("Không tìm thấy dịch vụ đã chọn");
+      notify.info("Không tìm thấy dịch vụ đã chọn");
       return;
     }
 
-    const payload = {
-      id: Number(selectedProduct.id),
-      name: selectedProduct.name,
-      price: Number(selectedProduct.price || 0),
-      cover: selectedProduct.cover || "",
-      description: selectedProduct.description || "",
-    };
+    const productMessage = [
+      `Gợi ý dịch vụ: ${selectedProduct.name}`,
+      `Giá: ${Number(selectedProduct.price || 0).toLocaleString("vi-VN")} VNĐ`,
+      selectedProduct.description ? `Mô tả: ${selectedProduct.description}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
 
-    try {
-      await apiClient.post(`/legacy`, { action: "sendLiveChatMessage", chat_session: selectedSession, sender: "admin", message: `🎁 Gợi ý dịch vụ: ${selectedProduct.name}`, message_type: "product", payload, customer_name: activeSessionInfo?.customer_name || "Khách hàng", customer_email: activeSessionInfo?.customer_email || "" }, { headers: buildAuthHeaders() });
-
-      await loadMessages(selectedSession);
-      await loadSessions();
-      setSelectedProductId("");
-    } catch (error) {
-      console.error("Send product message error:", error);
-      alert("Không thể gửi dịch vụ cho khách hàng");
-    }
+    await sendMessage(productMessage);
+    setSelectedProductId("");
   };
 
   return (
     <div className="chat-management-layout">
       <aside className="sidebar">
-        <div className="logo">NGỌC THIỆN ADMIN</div>
+        <div className="logo">NGỌC THIÊN ADMIN</div>
 
         <ul>
           <li>
@@ -201,7 +201,6 @@ export default function AdminChat() {
               <FaChartPie /> Tổng quan
             </NavLink>
           </li>
-
           {role === "admin" && (
             <li>
               <NavLink to="/qlnguoidung">
@@ -209,19 +208,16 @@ export default function AdminChat() {
               </NavLink>
             </li>
           )}
-
           <li>
             <NavLink to="/qlsanpham">
               <FaBox /> Dịch vụ
             </NavLink>
           </li>
-
           <li>
             <NavLink to="/qldonhang">
               <FaShoppingCart /> Đơn hàng
             </NavLink>
           </li>
-
           <li>
             <NavLink to="/qltinnhan">
               <FaComments /> Tin nhắn
@@ -242,13 +238,15 @@ export default function AdminChat() {
               <FaHistory /> Lịch sử hoạt động
             </NavLink>
           </li>
-
         </ul>
       </aside>
 
-      <div className="chat-management-content">
+      <main className="chat-management-content">
         <div className="page-header">
-          <h2>Tin nhắn trực tiếp khách hàng</h2>
+          <div>
+            <h2>Tin nhắn trực tiếp khách hàng</h2>
+            <p className="subtitle">Theo dõi các phiên chat, trả lời khách và gửi gợi ý dịch vụ.</p>
+          </div>
           <button type="button" className="btn-back" onClick={() => navigate("/dashboard")}>
             <FaArrowLeft /> Quay lại Dashboard
           </button>
@@ -293,7 +291,6 @@ export default function AdminChat() {
                         <span className="unread">{session.unread_count}</span>
                       )}
                     </div>
-
                     <div className="session-email">{session.customer_email || session.chat_session}</div>
                     <div className="session-message">{session.latest_message || "(Không có nội dung)"}</div>
                     <div className="session-time">
@@ -324,38 +321,20 @@ export default function AdminChat() {
                     <div className="empty">Khách hàng chưa gửi tin nhắn</div>
                   ) : (
                     messages.map((item) => {
-                      let payloadData = null;
-                      if (item.payload_json) {
-                        try {
-                          payloadData = JSON.parse(item.payload_json);
-                        } catch {
-                          payloadData = null;
-                        }
-                      }
-
+                      const senderType = item.sender_type || item.sender;
                       return (
-                      <div key={item.id} className={`chat-bubble ${item.sender === "admin" ? "admin" : "customer"}`}>
-                        <div className="bubble-label">{item.sender === "admin" ? "Nhân viên" : "Khách hàng"}</div>
-                        <div className="bubble-text">{item.message}</div>
-                        {item.message_type === "product" && payloadData && (
-                          <div className="bubble-product-card">
-                            <img
-                              src={getImageUrl(payloadData.cover)}
-                              alt={payloadData.name || "Dịch vụ"}
-                              onError={(e) => {
-                                e.currentTarget.src = "https://via.placeholder.com/180x120?text=No+Image";
-                              }}
-                            />
-                            <div className="bubble-product-meta">
-                              <strong>{payloadData.name || "Dịch vụ"}</strong>
-                              <span>{Number(payloadData.price || 0).toLocaleString()} VND</span>
-                            </div>
+                        <div
+                          key={item.id}
+                          className={`chat-bubble ${senderType === "admin" ? "admin" : "customer"}`}
+                        >
+                          <div className="bubble-label">
+                            {senderType === "admin" ? "Nhân viên" : "Khách hàng"}
                           </div>
-                        )}
-                        <div className="bubble-time">
-                          {item.created_at ? new Date(item.created_at).toLocaleString("vi-VN") : ""}
+                          <div className="bubble-text">{item.message}</div>
+                          <div className="bubble-time">
+                            {item.created_at ? new Date(item.created_at).toLocaleString("vi-VN") : ""}
+                          </div>
                         </div>
-                      </div>
                       );
                     })
                   )}
@@ -368,13 +347,12 @@ export default function AdminChat() {
                     placeholder="Nhập phản hồi cho khách hàng..."
                     onChange={(e) => setReply(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        handleSendReply();
-                      }
+                      if (e.key === "Enter") handleSendReply();
                     }}
+                    disabled={sending}
                   />
-                  <button type="button" onClick={handleSendReply}>
-                    <FaPaperPlane /> Gửi
+                  <button type="button" onClick={handleSendReply} disabled={sending || !reply.trim()}>
+                    <FaPaperPlane /> {sending ? "Đang gửi..." : "Gửi"}
                   </button>
                 </div>
 
@@ -382,16 +360,17 @@ export default function AdminChat() {
                   <select
                     value={selectedProductId}
                     onChange={(e) => setSelectedProductId(e.target.value)}
+                    disabled={sending}
                   >
                     <option value="">Chọn dịch vụ để gửi cho khách</option>
                     {products.map((product) => (
                       <option key={product.id} value={product.id}>
-                        {product.name} - {Number(product.price || 0).toLocaleString()} VND
+                        {product.name} - {Number(product.price || 0).toLocaleString("vi-VN")} VNĐ
                       </option>
                     ))}
                   </select>
 
-                  <button type="button" onClick={handleSendProduct} disabled={!selectedProductId}>
+                  <button type="button" onClick={handleSendProduct} disabled={sending || !selectedProductId}>
                     Gửi dịch vụ
                   </button>
                 </div>
@@ -399,7 +378,7 @@ export default function AdminChat() {
             )}
           </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }

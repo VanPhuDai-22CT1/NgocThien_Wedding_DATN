@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { notify } from "utils/notify";
   import "./style.scss";
   import { NavLink, useLocation, useNavigate } from "react-router-dom";
   import { createPortal } from "react-dom";
@@ -110,7 +111,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
         const res = await apiClient.post(`/legacy`, { action: "updateConsultationStatus", id, status }, { headers: buildAuthHeaders() });
         const data = res.data || {};
         if (!data.success) {
-          alert(data.message || "Cập nhật thất bại");
+          notify.info(data.message || "Cập nhật thất bại");
           return;
         }
 
@@ -118,11 +119,11 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
         setSelectedConsultation((prev) => (prev && prev.id === id ? { ...prev, status } : prev));
 
         if (data.warning) {
-          alert(`Đã xác nhận lịch tư vấn.\nLưu ý: ${data.warning}`);
+          notify.info(`Đã xác nhận lịch tư vấn.\nLưu ý: ${data.warning}`);
         }
       } catch (error) {
         console.log("Lỗi cập nhật:", error);
-        alert("Không thể cập nhật trạng thái. Vui lòng thử lại.");
+        notify.info("Không thể cập nhật trạng thái. Vui lòng thử lại.");
       }
     };
 

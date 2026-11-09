@@ -2,8 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import "./style.scss";
 import { NavLink, useNavigate } from "react-router-dom";
 import { apiClient, buildAuthHeaders } from "utils/apiClient";
-import { toast, ToastContainer } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
+import { toast } from "react-toastify";
 import { getAuthItem, logoutAuthSession } from "utils/authStorage";
 import { getDarkMode, setDarkModeStorage } from "utils/darkMode";
 
@@ -38,6 +37,7 @@ import {
 } from "chart.js";
 
 import { Bar, Pie } from "react-chartjs-2";
+import { notify } from "utils/notify";
 
 ChartJS.register(
   CategoryScale,
@@ -320,7 +320,7 @@ const Dashboard = () => {
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Export error:', error);
-      alert('Không thể xuất dữ liệu thống kê');
+      notify.info('Không thể xuất dữ liệu thống kê');
     }
   };
 
@@ -383,18 +383,6 @@ const Dashboard = () => {
   return (
 
     <>
-      <ToastContainer
-        position="top-right"
-        autoClose={5000}
-        hideProgressBar={false}
-        newestOnTop={true}
-        closeOnClick
-        rtl={false}
-        pauseOnFocusLoss
-        draggable
-        pauseOnHover
-      />
-
       <div className={`dashboard-layout ${darkMode ? "dark":""}`}>
 
       {/* SIDEBAR */}

@@ -5,6 +5,7 @@ import "./style.scss";
 
 import nen from "assets/users/images/nen/nendn.jpg";
 import logo from "assets/users/images/icondau/logodvkv.png";
+import { notify } from "utils/notify";
 
 const QuenMatKhauStandalone = () => {
   const [email, setEmail] = useState("");
@@ -21,7 +22,7 @@ const QuenMatKhauStandalone = () => {
     e.preventDefault();
 
     if (!email) {
-      alert("Vui lòng nhập email");
+      notify.warning("Vui lòng nhập email");
       return;
     }
 
@@ -40,14 +41,14 @@ const QuenMatKhauStandalone = () => {
       );
 
       if (res.data?.success) {
-        alert("OTP đã được gửi về email");
+        notify.success(res.data?.message || "OTP đã được gửi về email");
         localStorage.setItem("reset_email", email);
         setStep(2); // Chuyển sang nhập OTP
       } else {
-        alert(res.data?.message || "Gửi mã thất bại");
+        notify.error(res.data?.message || "Gửi mã thất bại");
       }
     } catch (err) {
-      alert("Không kết nối được server");
+      notify.error("Không kết nối được server");
     } finally {
       setLoading(false);
     }
@@ -60,7 +61,7 @@ const QuenMatKhauStandalone = () => {
     e.preventDefault();
 
     if (!otp) {
-      alert("Vui lòng nhập OTP");
+      notify.warning("Vui lòng nhập OTP");
       return;
     }
 
@@ -80,13 +81,13 @@ const QuenMatKhauStandalone = () => {
       );
 
       if (res.data?.success) {
-        alert("OTP hợp lệ");
+        notify.success("OTP hợp lệ");
         navigate("/datlaimatkhau"); // OTP đúng -> đổi mật khẩu
       } else {
-        alert(res.data?.message || "OTP không đúng");
+        notify.error(res.data?.message || "OTP không đúng");
       }
     } catch (err) {
-      alert("Không kết nối được server");
+      notify.error("Không kết nối được server");
     } finally {
       setLoading(false);
     }

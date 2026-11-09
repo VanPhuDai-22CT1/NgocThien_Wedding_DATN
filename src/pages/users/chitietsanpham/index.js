@@ -6,6 +6,7 @@ import { addGuestCartItem } from "utils/guestCart";
 import { apiClient, buildAuthHeaders } from "utils/apiClient";
 import { getImageUrl, getProductImage, parseImageList } from "utils/image";
 import "./style.scss";
+import { notify } from "utils/notify";
 
 const fallbackImage = "https://via.placeholder.com/1000x700?text=No+Image";
 
@@ -318,7 +319,7 @@ const ProductDetail = () => {
 
     if (!storedUserId) {
       addGuestCartItem(item, Number(quantity || 1));
-      alert("Đã thêm dịch vụ vào giỏ hàng!");
+      notify.info("Đã thêm dịch vụ vào giỏ hàng!");
       return true;
     }
 
@@ -334,15 +335,15 @@ const ProductDetail = () => {
       );
 
       if (response.data?.success) {
-        alert("Đã thêm dịch vụ vào giỏ hàng!");
+        notify.info("Đã thêm dịch vụ vào giỏ hàng!");
         return true;
       }
 
-      alert(response.data?.message || "Thêm dịch vụ thất bại!");
+      notify.info(response.data?.message || "Thêm dịch vụ thất bại!");
       return false;
     } catch (error) {
       console.error("Add cart error:", error);
-      alert("Có lỗi xảy ra khi thêm dịch vụ vào giỏ hàng!");
+      notify.info("Có lỗi xảy ra khi thêm dịch vụ vào giỏ hàng!");
       return false;
     }
   };
@@ -357,18 +358,18 @@ const ProductDetail = () => {
     const username = getAuthItem("username") || "Khách hàng";
 
     if (!storedUserId) {
-      alert("Vui lòng đăng nhập để gửi đánh giá!");
+      notify.info("Vui lòng đăng nhập để gửi đánh giá!");
       navigate("/login");
       return;
     }
 
     if (!reviewEligibility.canReview) {
-      alert(reviewEligibility.message);
+      notify.info(reviewEligibility.message);
       return;
     }
 
     if (!reviewForm.comment.trim()) {
-      alert("Vui lòng nhập nội dung đánh giá!");
+      notify.info("Vui lòng nhập nội dung đánh giá!");
       return;
     }
 
@@ -384,13 +385,13 @@ const ProductDetail = () => {
       if (response.data?.success) {
         setReviewForm({ rating: 5, comment: "" });
         await loadReviews();
-        alert("Cảm ơn bạn đã gửi đánh giá!");
+        notify.info("Cảm ơn bạn đã gửi đánh giá!");
       } else {
-        alert(response.data?.message || "Gửi đánh giá thất bại!");
+        notify.info(response.data?.message || "Gửi đánh giá thất bại!");
       }
     } catch (error) {
       console.error("Submit review error:", error);
-      alert("Có lỗi xảy ra khi gửi đánh giá!");
+      notify.info("Có lỗi xảy ra khi gửi đánh giá!");
     } finally {
       setSubmittingReview(false);
     }

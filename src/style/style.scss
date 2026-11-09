@@ -1,2 +1,36 @@
 @import "pages/all";
 @import "pages/responsive";
+
+.app-confirm-toast {
+  display: grid;
+  gap: 12px;
+}
+
+.app-confirm-toast__message {
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.app-confirm-toast__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.app-confirm-toast__actions button {
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 700;
+  padding: 8px 12px;
+}
+
+.app-confirm-toast__actions button:first-child {
+  background: #7a1f2b;
+  color: #fff;
+}
+
+.app-confirm-toast__actions button:last-child {
+  background: #fff;
+  color: #222;
+}
