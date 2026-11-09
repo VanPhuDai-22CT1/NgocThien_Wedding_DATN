@@ -3,6 +3,7 @@ import "./style.scss";
 import { getAuthItem } from "utils/authStorage";
 import { apiClient, buildAuthHeaders } from "utils/apiClient";
 import { useLocation, useNavigate } from "react-router-dom";
+import { notify } from "utils/notify";
 
 const Notification = () => {
   const [consultations, setConsultations] = useState([]);
@@ -217,7 +218,7 @@ const Notification = () => {
         return true;
       }
 
-      alert(data.message || "Thao tác thất bại!");
+      notify.info(data.message || "Thao tác thất bại!");
       return false;
     } catch (error) {
       console.error("Lỗi:", error);
@@ -241,7 +242,7 @@ const Notification = () => {
 
   const handleUpdate = async () => {
     if (!formData.name || !formData.service || !formData.event_date) {
-      alert("Vui lòng nhập đầy đủ thông tin!");
+      notify.info("Vui lòng nhập đầy đủ thông tin!");
       return;
     }
 
@@ -250,20 +251,20 @@ const Notification = () => {
     if (success) {
       setEditingId(null);
       setSelectedConsultation(null);
-      alert("Cập nhật thành công!");
+      notify.info("Cập nhật thành công!");
     }
   };
 
   const handleDelete = async (id) => {
     if (selectedConsultation?.source === "order") return;
-    if (!window.confirm("Bạn có chắc muốn hủy lịch này?")) return;
+    if (!(await notify.confirm("Bạn có chắc muốn hủy lịch này?"))) return;
 
     const success = await callApi("deleteConsultation", { id });
 
     if (success) {
       setEditingId(null);
       setSelectedConsultation(null);
-      alert("Hủy lịch thành công!");
+      notify.info("Hủy lịch thành công!");
     }
   };
 

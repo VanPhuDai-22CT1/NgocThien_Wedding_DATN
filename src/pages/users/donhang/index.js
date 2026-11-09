@@ -4,6 +4,7 @@ import { FaCalendarAlt, FaClipboardList, FaMapMarkerAlt, FaPhoneAlt, FaRegHeart,
 import { getAuthItem } from "utils/authStorage";
 import { apiClient, buildAuthHeaders } from "utils/apiClient";
 import "./style.scss";
+import { notify } from "utils/notify";
 
 const STATUS_OPTIONS = [
   "Đang xử lý",
@@ -181,11 +182,11 @@ const Receipt = () => {
         await fetchOrders();
         setStatusMap((prev) => ({ ...prev, [orderId]: "" }));
       } else {
-        alert(res.data.message || "Cập nhật thất bại.");
+        notify.info(res.data.message || "Cập nhật thất bại.");
       }
     } catch (err) {
       console.error(err);
-      alert("Lỗi hệ thống.");
+      notify.info("Lỗi hệ thống.");
     }
   };
 

@@ -32,6 +32,7 @@ import {
   Tooltip,
   Legend
 } from "chart.js";
+import { notify } from "utils/notify";
 
 ChartJS.register(
   CategoryScale,
@@ -115,7 +116,7 @@ const Statistics = () => {
         window.URL.revokeObjectURL(url);
       } catch (err) {
         console.error('Export error', err);
-        alert('Không thể xuất dữ liệu');
+        notify.info('Không thể xuất dữ liệu');
       }
     })();
   };

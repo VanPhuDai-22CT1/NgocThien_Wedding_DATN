@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ngoc Thien Wedding - Database ERD</title>
+  <style>
+    :root {
+      --bg: #f6f7fb;
+      --panel: #ffffff;
+      --ink: #172033;
+      --muted: #64748b;
+      --line: #d9e0ec;
+      --red: #dc2626;
+      --red-soft: #fff1f2;
+      --gold: #d4af37;
+      --blue: #2563eb;
+      --green: #16a34a;
+      --shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Inter, Arial, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(220, 38, 38, 0.10), transparent 28%),
+        linear-gradient(135deg, #fffafa 0%, var(--bg) 48%, #ffffff 100%);
+    }
+
+    header {
+      padding: 28px 36px 18px;
+      border-bottom: 1px solid rgba(217, 224, 236, 0.8);
+      background: rgba(255, 255, 255, 0.76);
+      backdrop-filter: blur(10px);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 28px;
+      letter-spacing: 0;
+      color: #7f1d1d;
+    }
+
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 16px 36px 0;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 7px 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.78);
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--red);
+    }
+
+    .dot.blue {
+      background: var(--blue);
+    }
+
+    .dot.green {
+      background: var(--green);
+    }
+
+    .dot.gold {
+      background: var(--gold);
+    }
+
+    main {
+      padding: 24px 36px 40px;
+    }
+
+    .diagram {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(230px, 1fr));
+      gap: 20px;
+      align-items: start;
+    }
+
+    .group {
+      display: grid;
+      gap: 16px;
+    }
+
+    .group-title {
+      margin: 0;
+      color: #991b1b;
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .table {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+    }
+
+    .table h2 {
+      margin: 0;
+      padding: 12px 14px;
+      font-size: 16px;
+      color: #ffffff;
+      background: linear-gradient(135deg, #b91c1c 0%, #dc2626 100%);
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .table h2 small {
+      font-size: 11px;
+      opacity: 0.84;
+      font-weight: 700;
+    }
+
+    .table.product h2 {
+      background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%);
+    }
+
+    .table.order h2 {
+      background: linear-gradient(135deg, #166534 0%, #16a34a 100%);
+    }
+
+    .table.system h2 {
+      background: linear-gradient(135deg, #92400e 0%, #d97706 100%);
+    }
+
+    .fields {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    .fields li {
+      display: grid;
+      grid-template-columns: minmax(92px, 1fr) auto;
+      gap: 8px;
+      padding: 8px 12px;
+      border-top: 1px solid #eef2f7;
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .fields li:first-child {
+      border-top: none;
+    }
+
+    .field {
+      font-weight: 800;
+      color: #1f2937;
+      word-break: break-word;
+    }
+
+    .type {
+      color: var(--muted);
+      font-family: Consolas, Monaco, monospace;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .key {
+      color: #dc2626;
+    }
+
+    .relation-panel {
+      margin-top: 24px;
+      background: rgba(255, 255, 255, 0.86);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+      padding: 18px;
+    }
+
+    .relation-panel h2 {
+      margin: 0 0 14px;
+      font-size: 18px;
+      color: #7f1d1d;
+    }
+
+    .relations {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(220px, 1fr));
+      gap: 10px;
+    }
+
+    .relation {
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: #fff7f7;
+      border: 1px solid #fee2e2;
+      color: #374151;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .relation b {
+      color: #991b1b;
+    }
+
+    code {
+      font-family: Consolas, Monaco, monospace;
+      color: #1d4ed8;
+      font-weight: 700;
+    }
+
+    @media (max-width: 1180px) {
+      .diagram,
+      .relations {
+        grid-template-columns: repeat(2, minmax(230px, 1fr));
+      }
+    }
+
+    @media (max-width: 720px) {
+      header,
+      main {
+        padding-left: 16px;
+        padding-right: 16px;
+      }
+
+      .legend {
+        padding-left: 16px;
+        padding-right: 16px;
+      }
+
+      .diagram,
+      .relations {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Prisma Schema - Thiết kế Database</h1>
+    <p class="subtitle">
+      Bản trực quan dựa trên các Sequelize model hiện có của dự án Ngọc Thiện Wedding.
+      Có thể dùng trong báo cáo như sơ đồ ERD/Prisma schema.
+    </p>
+  </header>
+
+  <div class="legend">
+    <span><i class="dot"></i>Người dùng</span>
+    <span><i class="dot blue"></i>Dịch vụ / Sản phẩm</span>
+    <span><i class="dot green"></i>Đơn hàng</span>
+    <span><i class="dot gold"></i>Hệ thống</span>
+  </div>
+
+  <main>
+    <section class="diagram">
+      <div class="group">
+        <h3 class="group-title">Người dùng</h3>
+
+        <article class="table">
+          <h2>users <small>User</small></h2>
+          <ul class="fields">
+            <li><span class="field key">id</span><span class="type">Int PK</span></li>
+            <li><span class="field">username</span><span class="type">String unique</span></li>
+            <li><span class="field">email</span><span class="type">String unique</span></li>
+            <li><span class="field">password</span><span class="type">String</span></li>
+            <li><span class="field">full_name</span><span class="type">String?</span></li>
+            <li><span class="field">phone</span><span class="type">String?</span></li>
+            <li><span class="field">address</span><span class="type">Text?</span></li>
+            <li><span class="field">avatar</span><span class="type">String?</span></li>
+            <li><span class="field">role</span><span class="type">user | admin</span></li>
+            <li><span class="field">is_active</span><span class="type">Boolean</span></li>
+          </ul>
+        </article>
+
+        <article class="table">
+          <h2>consultations <small>Consultation</small></h2>
+          <ul class="fields">
+            <li><span class="field key">id</span><span class="type">Int PK</span></li>
+            <li><span class="field key">user_id</span><span class="type">Int? FK</span></li>
+            <li><span class="field">name</span><span class="type">String</span></li>
+            <li><span class="field">email</span><span class="type">String</span></li>
+            <li><span class="field">phone</span><span class="type">String</span></li>
+            <li><span class="field">service</span><span class="type">Text?</span></li>
+            <li><span class="field">event_date</span><span class="type">DateTime?</span></li>
+            <li><span class="field">status</span><span class="type">Enum</span></li>
+            <li><span class="field">is_read</span><span class="type">Boolean</span></li>
+          </ul>
+        </article>
+      </div>
+
+      <div class="group">
+        <h3 class="group-title">Dịch vụ</h3>
+
+        <article class="table product">
+          <h2>products <small>Product</small></h2>
+          <ul class="fields">
+            <li><span class="field key">id</span><span class="type">Int PK</span></li>
+            <li><span class="field">name</span><span class="type">String</span></li>
+            <li><span class="field">description</span><span class="type">Text?</span></li>
+            <li><span class="field">price</span><span class="type">BigInt</span></li>
+            <li><span class="field">stock</span><span class="type">Int</span></li>
+            <li><span class="field">category_id</span><span class="type">Int?</span></li>
+            <li><span class="field">image_urls</span><span class="type">Json</span></li>
+            <li><span class="field">cover</span><span class="type">String?</span></li>
+            <li><span class="field">is_featured</span><span class="type">Boolean</span></li>
+            <li><span class="field">service_details</span><span class="type">Text?</span></li>
+          </ul>
+        </article>
+
+        <article class="table product">
+          <h2>product_reviews <small>ProductReview</small></h2>
+          <ul class="fields">
+            <li><span class="field key">id</span><span class="type">Int PK</span></li>
+            <li><span class="field key">product_id</span><span class="type">Int FK</span></li>
+            <li><span class="field key">user_id</span><span class="type">Int? FK</span></li>
+            <li><span class="field">reviewer_name</span><span class="type">String</span></li>
+            <li><span class="field">rating</span><span class="type">Int</span></li>
+            <li><span class="field">comment</span><span class="type">Text?</span></li>
+          </ul>
+        </article>
+      </div>
+
+      <div class="group">
+        <h3 class="group-title">Đơn hàng</h3>
+
+        <article class="table order">
+          <h2>orders <small>Order</small></h2>
+          <ul class="fields">
+            <li><span class="field key">id</span><span class="type">Int PK</span></li>
+            <li><span class="field key">user_id</span><span class="type">Int FK</span></li>
+            <li><span class="field">order_code</span><span class="type">String unique</span></li>
+            <li><span class="field">total_amount</span><span class="type">BigInt</span></li>
+            <li><span class="field">status</span><span class="type">OrderStatus</span></li>
+            <li><span class="field">delivery_address</span><span class="type">Text?</span></li>
+            <li><span class="field">phone</span><span class="type">String?</span></li>
+            <li><span class="field">payment_method</span><span class="type">String?</span></li>
+            <li><span class="field">payment_status</span><span class="type">PaymentStatus</span></li>
+          </ul>
+        </article>
+
+        <article class="table order">
+          <h2>order_items <small>OrderItem</small></h2>
+          <ul class="fields">
+            <li><span class="field key">id</span><span class="type">Int PK</span></li>
+            <li><span class="field key">order_id</span><span class="type">Int FK</span></li>
+            <li><span class="field key">product_id</span><span class="type">Int FK</span></li>
+            <li><span class="field">quantity</span><span class="type">Int</span></li>
+            <li><span class="field">price</span><span class="type">BigInt</span></li>
+            <li><span class="field">subtotal</span><span class="type">BigInt</span></li>
+          </ul>
+        </article>
+
+        <article class="table order">
+          <h2>shopping_carts <small>ShoppingCart</small></h2>
+          <ul class="fields">
+            <li><span class="field key">id</span><span class="type">Int PK</span></li>
+            <li><span class="field key">user_id</span><span class="type">Int FK</span></li>
+            <li><span class="field key">product_id</span><span class="type">Int FK</span></li>
+            <li><span class="field">quantity</span><span class="type">Int</span></li>
+            <li><span class="field">unique</span><span class="type">user + product</span></li>
+          </ul>
+        </article>
+      </div>
+
+      <div class="group">
+        <h3 class="group-title">Hệ thống</h3>
+
+        <article class="table system">
+          <h2>live_chat_sessions <small>LiveChatSession</small></h2>
+          <ul class="fields">
+            <li><span class="field key">id</span><span class="type">Int PK</span></li>
+            <li><span class="field key">chat_session</span><span class="type">String unique</span></li>
+            <li><span class="field">customer_name</span><span class="type">String</span></li>
+            <li><span class="field">customer_email</span><span class="type">String?</span></li>
+            <li><span class="field key">user_id</span><span class="type">Int? FK</span></li>
+            <li><span class="field">status</span><span class="type">active | closed</span></li>
+            <li><span class="field">is_read_by_admin</span><span class="type">Boolean</span></li>
+          </ul>
+        </article>
+
+        <article class="table system">
+          <h2>live_chat_messages <small>LiveChatMessage</small></h2>
+          <ul class="fields">
+            <li><span class="field key">id</span><span class="type">Int PK</span></li>
+            <li><span class="field key">chat_session</span><span class="type">String FK</span></li>
+            <li><span class="field">sender_type</span><span class="type">customer | admin</span></li>
+            <li><span class="field">sender_name</span><span class="type">String</span></li>
+            <li><span class="field">message</span><span class="type">Text</span></li>
+          </ul>
+        </article>
+
+        <article class="table system">
+          <h2>homepage_configs <small>HomepageConfig</small></h2>
+          <ul class="fields">
+            <li><span class="field key">id</span><span class="type">Int PK</span></li>
+            <li><span class="field">gallery_images</span><span class="type">Json</span></li>
+            <li><span class="field">header_slider_images</span><span class="type">Json</span></li>
+            <li><span class="field">hero_background_image</span><span class="type">String?</span></li>
+            <li><span class="field">consult_image</span><span class="type">String?</span></li>
+            <li><span class="field">image_history</span><span class="type">Json</span></li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section class="relation-panel">
+      <h2>Quan hệ chính</h2>
+      <div class="relations">
+        <div class="relation"><b>User</b> 1 - n <b>Order</b> qua <code>orders.user_id</code></div>
+        <div class="relation"><b>Order</b> 1 - n <b>OrderItem</b> qua <code>order_items.order_id</code></div>
+        <div class="relation"><b>Product</b> 1 - n <b>OrderItem</b> qua <code>order_items.product_id</code></div>
+        <div class="relation"><b>User</b> 1 - n <b>ShoppingCart</b> qua <code>shopping_carts.user_id</code></div>
+        <div class="relation"><b>Product</b> 1 - n <b>ShoppingCart</b> qua <code>shopping_carts.product_id</code></div>
+        <div class="relation"><b>Product</b> 1 - n <b>ProductReview</b> qua <code>product_reviews.product_id</code></div>
+        <div class="relation"><b>User</b> 1 - n <b>Consultation</b> qua <code>consultations.user_id</code></div>
+        <div class="relation"><b>LiveChatSession</b> 1 - n <b>LiveChatMessage</b> qua <code>chat_session</code></div>
+        <div class="relation"><b>User</b> 1 - n <b>LiveChatSession</b> qua <code>live_chat_sessions.user_id</code></div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

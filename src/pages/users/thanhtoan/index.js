@@ -5,6 +5,7 @@ import { FaMoneyBillWave, FaQrcode, FaCheckCircle } from "react-icons/fa";
 import { getAuthItem } from "utils/authStorage";
 import { apiClient, buildAuthHeaders } from "utils/apiClient";
 import "./style.scss";
+import { notify } from "utils/notify";
 
 const BANK_BIN = process.env.REACT_APP_BANK_BIN || "970423";
 const BANK_ACCOUNT = process.env.REACT_APP_BANK_ACCOUNT || "24122004079";
@@ -35,7 +36,7 @@ const ThanhToan = () => {
 
   useEffect(() => {
     if (!userId) {
-      alert("Vui lòng đăng nhập để tiếp tục thanh toán. Nhấn OK để chuyển sang trang đăng nhập.");
+      notify.info("Vui lòng đăng nhập để tiếp tục thanh toán. Nhấn OK để chuyển sang trang đăng nhập.");
       navigate("/login");
       return;
     }
@@ -95,22 +96,22 @@ const ThanhToan = () => {
 
   const handlePayment = async () => {
     if (!userId) {
-      alert("⚠️ Bạn chưa đăng nhập");
+      notify.info("⚠️ Bạn chưa đăng nhập");
       return;
     }
 
     if (!bookingForm?.name || !bookingForm?.phone || !bookingForm?.eventDate) {
-      alert("Thiếu thông tin đặt dịch vụ. Vui lòng quay lại bước trước.");
+      notify.info("Thiếu thông tin đặt dịch vụ. Vui lòng quay lại bước trước.");
       return;
     }
 
     if (bookingForm.eventDate < minEventDate) {
-      alert("Ngày cưới phải cách ngày hiện tại ít nhất 2 ngày.");
+      notify.info("Ngày cưới phải cách ngày hiện tại ít nhất 2 ngày.");
       return;
     }
 
     if (cartItems.length === 0) {
-      alert("Giỏ dịch vụ đang trống");
+      notify.info("Giỏ dịch vụ đang trống");
       return;
     }
 
@@ -161,11 +162,11 @@ const ThanhToan = () => {
           }
         });
       } else {
-        alert(res.data.message || "Thanh toán thất bại");
+        notify.info(res.data.message || "Thanh toán thất bại");
       }
     } catch (error) {
       console.error(error);
-      alert("❌ Lỗi kết nối server");
+      notify.info("❌ Lỗi kết nối server");
     } finally {
       setLoading(false);
     }

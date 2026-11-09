@@ -509,6 +509,113 @@ body {
 /* =========================================
    LOADING / ERROR
 ========================================= */
+.system-modal-overlay {
+  background: rgba(17, 24, 39, 0.58);
+  backdrop-filter: blur(8px);
+  z-index: 2000;
+}
+
+.system-modal-box {
+  width: min(520px, calc(100vw - 32px));
+  padding: 26px;
+  border-radius: 16px;
+  background: #ffffff;
+  border: 1px solid rgba(220, 38, 38, 0.14);
+  box-shadow: 0 24px 80px rgba(17, 24, 39, 0.28);
+  animation: fadeUp 0.24s ease;
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: 16px;
+}
+
+.system-modal-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #fef2f2;
+  color: #dc2626;
+  font-size: 20px;
+}
+
+.system-modal-content {
+  min-width: 0;
+
+  .system-modal-kicker {
+    display: inline-block;
+    margin-bottom: 6px;
+    color: #991b1b;
+    font-size: 12px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  h3 {
+    margin: 0 0 8px;
+    color: #111827;
+    font-size: 22px;
+    line-height: 1.2;
+  }
+
+  p {
+    margin: 0;
+    color: #4b5563;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  b {
+    color: #991b1b;
+  }
+}
+
+.system-modal-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 8px;
+
+  button {
+    min-height: 40px;
+    border: none;
+    border-radius: 10px;
+    padding: 0 16px;
+    font-weight: 800;
+    cursor: pointer;
+    transition: $transition;
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+  }
+
+  .system-cancel-btn {
+    background: #f3f4f6;
+    color: #374151;
+
+    &:hover:not(:disabled) {
+      background: #e5e7eb;
+    }
+  }
+
+  .system-danger-btn {
+    background: #dc2626;
+    color: #ffffff;
+    box-shadow: 0 10px 22px rgba(220, 38, 38, 0.24);
+
+    &:hover:not(:disabled) {
+      background: #b91c1c;
+      transform: translateY(-1px);
+    }
+  }
+}
+
 .loading {
   padding: 15px;
   background: $primary-soft;
@@ -574,5 +681,17 @@ body {
 
   .user-grid {
     grid-template-columns: 1fr;
+  }
+
+  .system-modal-box {
+    grid-template-columns: 1fr;
+  }
+
+  .system-modal-actions {
+    flex-direction: column-reverse;
+
+    button {
+      width: 100%;
+    }
   }
 }

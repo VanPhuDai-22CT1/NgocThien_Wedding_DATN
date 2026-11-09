@@ -5,6 +5,7 @@ import { getAuthItem } from "utils/authStorage";
 import { getGuestCart } from "utils/guestCart";
 import { apiClient, buildAuthHeaders } from "utils/apiClient";
 import "./style.scss";
+import { notify } from "utils/notify";
 
 const DatDichVu = () => {
   const navigate = useNavigate();
@@ -114,22 +115,22 @@ const DatDichVu = () => {
 
     const handleContinue = () => {
     if (!formData.name || !formData.phone || !formData.eventDate) {
-      alert("Vui lòng nhập đầy đủ Họ tên, SĐT và Ngày cưới dự kiến");
+      notify.info("Vui lòng nhập đầy đủ Họ tên, SĐT và Ngày cưới dự kiến");
       return;
     }
 
     if (formData.eventDate < minEventDate) {
-      alert("Ngày cưới phải cách ngày hiện tại ít nhất 2 ngày.");
+      notify.info("Ngày cưới phải cách ngày hiện tại ít nhất 2 ngày.");
       return;
     }
 
       if (dateStatus === "full") {
-        alert("Ngày này đã đủ 2 tiệc cưới, vui lòng chọn ngày khác.");
+        notify.info("Ngày này đã đủ 2 tiệc cưới, vui lòng chọn ngày khác.");
         return;
       }
 
       if (cart.length === 0) {
-      alert("Giỏ dịch vụ đang trống");
+      notify.info("Giỏ dịch vụ đang trống");
       return;
     }
 

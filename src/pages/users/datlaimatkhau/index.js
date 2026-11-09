@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import "./style.scss";
 import nen from "assets/users/images/nen/nendn.jpg";
 import logo from "assets/users/images/icondau/logodvkv.png";
+import { notify } from "utils/notify";
 
 const DatLaiMatKhau = () => {
   const [email, setEmail] = useState("");
@@ -20,12 +21,12 @@ const DatLaiMatKhau = () => {
   e.preventDefault();
 
   if (matkhau.length < 6) {
-    alert("Mật khẩu phải từ 6 ký tự");
+    notify.warning("Mật khẩu phải từ 6 ký tự");
     return;
   }
 
   if (matkhau !== nhaplai) {
-    alert("Mật khẩu không khớp");
+    notify.warning("Mật khẩu không khớp");
     return;
   }
 
@@ -42,14 +43,14 @@ const DatLaiMatKhau = () => {
     const data = await res.json();
 
     if (data.success) {
-      alert("Đặt lại mật khẩu thành công");
+      notify.success("Đặt lại mật khẩu thành công");
       localStorage.removeItem("reset_email");
       navigate("/login");
     } else {
-      alert(data.message || "Lỗi đổi mật khẩu");
+      notify.error(data.message || "Lỗi đổi mật khẩu");
     }
   } catch (err) {
-    alert("Không kết nối được server");
+    notify.error("Không kết nối được server");
     console.error("Fetch error:", err);
   }
 };

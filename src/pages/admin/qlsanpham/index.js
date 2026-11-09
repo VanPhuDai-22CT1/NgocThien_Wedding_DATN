@@ -10,6 +10,7 @@ import {
   FaSignOutAlt, FaEdit, FaTrash, FaArrowLeft, FaImage, FaRegCalendarAlt
 } from "react-icons/fa";
 import "./style.scss";
+import { notify } from "utils/notify";
 
 export default function QLSanPham() {
   const navigate = useNavigate();
@@ -154,7 +155,7 @@ export default function QLSanPham() {
     e.preventDefault();
 
     if (!form.name.trim()) {
-      alert("Vui lòng nhập tên dịch vụ!");
+      notify.info("Vui lòng nhập tên dịch vụ!");
       return;
     }
 
@@ -189,15 +190,15 @@ export default function QLSanPham() {
       const res = await apiClient.post(`/legacy?action=${action}`, formData, { headers: { ...buildAuthHeaders(), "Content-Type": "multipart/form-data" } });
 
       if (res.data?.success) {
-        alert(editingId ? "Cập nhật thành công!" : "Thêm dịch vụ thành công!");
+        notify.info(editingId ? "Cập nhật thành công!" : "Thêm dịch vụ thành công!");
         resetForm();
         fetchProducts();
       } else {
-        alert("Thao tác thất bại!");
+        notify.info("Thao tác thất bại!");
       }
     } catch (err) {
       console.error(err);
-      alert("Có lỗi xảy ra!");
+      notify.info("Có lỗi xảy ra!");
     } finally {
       setLoading(false);
     }
@@ -221,19 +222,19 @@ export default function QLSanPham() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm("Bạn có chắc muốn xóa dịch vụ này?")) return;
+    if (!(await notify.confirm("Bạn có chắc muốn xóa dịch vụ này?"))) return;
 
     setLoading(true);
     try {
       const res = await apiClient.get(`/legacy`, { params: { action: "deleteProduct", id }, headers: buildAuthHeaders() });
 
       if (res.data?.success) {
-        alert("Xóa thành công!");
+        notify.info("Xóa thành công!");
         fetchProducts();
       }
     } catch (err) {
       console.error(err);
-      alert("Xóa thất bại!");
+      notify.info("Xóa thất bại!");
     } finally {
       setLoading(false);
     }
@@ -271,11 +272,11 @@ export default function QLSanPham() {
           )
         );
       } else {
-        alert(res.data?.message || "Không cập nhật được sản phẩm nổi bật");
+        notify.info(res.data?.message || "Không cập nhật được sản phẩm nổi bật");
       }
     } catch (err) {
       console.error(err);
-      alert("Có lỗi xảy ra khi cập nhật nổi bật");
+      notify.info("Có lỗi xảy ra khi cập nhật nổi bật");
     } finally {
       setUpdatingFeaturedId(null);
     }

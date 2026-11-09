@@ -6,6 +6,7 @@ import "./style.scss";
 
 import nen from "assets/users/images/nen/nendn.jpg";
 import logo from "assets/users/images/icondau/logodvkv.png";
+import { notify } from "utils/notify";
 
 const LoginPage = () => {
   const navigate = useNavigate();
@@ -75,15 +76,16 @@ const LoginPage = () => {
           console.error("Merge guest cart error:", error);
         }
 
-        alert("🎉 Đăng nhập thành công!");
-
         window.name = JSON.stringify(authPayload);
 
-        if (normalizedRole === "admin") {
-          window.location.assign(`${adminOrigin}/dashboard`);
-        } else {
-          window.location.assign(`${userOrigin}/`);
-        }
+        notify.success("Đăng nhập thành công!");
+
+        const redirectUrl =
+          normalizedRole === "admin" ? `${adminOrigin}/dashboard` : `${userOrigin}/`;
+
+        setTimeout(() => {
+          window.location.assign(redirectUrl);
+        }, 1000);
       } else {
         setErrorMessage(data.message || "Đăng nhập thất bại");
       }
