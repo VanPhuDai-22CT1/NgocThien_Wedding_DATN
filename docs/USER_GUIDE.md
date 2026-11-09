@@ -1,5 +1,7 @@
 # Hướng dẫn sử dụng NgocThien Wedding
 
+> Xem phiên bản trình bày như website tại [Cẩm nang trực tuyến](https://vanphudai-22ct1.github.io/NgocThien_Wedding_DATN/).
+
 Tài liệu này hướng dẫn hai nhóm người dùng: khách hàng đặt dịch vụ cưới và nhân viên quản trị website. Giao diện có thể khác đôi chút tùy dữ liệu và cấu hình của từng môi trường.
 
 ## 1. Bắt đầu sử dụng
