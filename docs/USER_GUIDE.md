@@ -1,6 +1,6 @@
 # Hướng dẫn sử dụng NgocThien Wedding
 
-> Xem phiên bản trình bày như website tại [Cẩm nang trực tuyến](https://vanphudai-22ct1.github.io/NgocThien_Wedding_DATN/).
+> Phiên bản trình bày như website nằm tại [docs/index.html](index.html). Để xuất bản công khai, bật GitHub Pages trong phần Settings → Pages của repository.
 
 Tài liệu này hướng dẫn hai nhóm người dùng: khách hàng đặt dịch vụ cưới và nhân viên quản trị website. Giao diện có thể khác đôi chút tùy dữ liệu và cấu hình của từng môi trường.
 
