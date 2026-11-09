@@ -1,0 +1,474 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#35283a" />
+    <meta name="description" content="Cẩm nang sử dụng NgocThien Wedding: chọn dịch vụ, đặt lịch, thanh toán và quản trị website." />
+    <title>Cẩm nang sử dụng | NgocThien Wedding</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #35283a;
+        --ink-soft: #655a66;
+        --plum: #654765;
+        --plum-dark: #49344b;
+        --champagne: #b58b62;
+        --paper: #fbfaf8;
+        --surface: #fff;
+        --line: #e9e3e7;
+        --sage: #557166;
+        --rose: #f1e8e8;
+        --serif: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+        --sans: "Aptos", "Segoe UI", system-ui, -apple-system, sans-serif;
+      }
+
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; scroll-padding-top: 32px; }
+      body {
+        margin: 0;
+        background: var(--paper);
+        color: var(--ink);
+        font: 16px/1.68 var(--sans);
+        -webkit-font-smoothing: antialiased;
+      }
+      a { color: inherit; }
+      a:focus-visible, button:focus-visible, summary:focus-visible {
+        outline: 3px solid var(--champagne);
+        outline-offset: 4px;
+        border-radius: 4px;
+      }
+      .topbar {
+        height: 72px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 clamp(22px, 5vw, 76px);
+        border-bottom: 1px solid var(--line);
+        background: rgba(251, 250, 248, .94);
+      }
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 12px;
+        text-decoration: none;
+        font-size: 14px;
+        font-weight: 700;
+        letter-spacing: .025em;
+      }
+      .brand-mark {
+        display: grid;
+        width: 34px;
+        height: 34px;
+        place-items: center;
+        border: 1px solid #d8c6b3;
+        border-radius: 50%;
+        color: var(--plum);
+        font: 18px/1 var(--serif);
+      }
+      .top-link {
+        color: var(--ink-soft);
+        font-size: 13px;
+        font-weight: 600;
+        text-decoration: none;
+      }
+      .top-link:hover { color: var(--plum); }
+
+      .hero {
+        position: relative;
+        overflow: hidden;
+        display: grid;
+        grid-template-columns: minmax(0, 1.22fr) minmax(280px, .78fr);
+        gap: clamp(36px, 8vw, 120px);
+        align-items: center;
+        min-height: 440px;
+        padding: 82px clamp(22px, 10vw, 150px) 86px;
+        background: var(--ink);
+        color: #fff;
+      }
+      .hero::after {
+        position: absolute;
+        right: -110px;
+        bottom: -230px;
+        width: 570px;
+        height: 570px;
+        border: 1px solid rgba(224, 198, 171, .24);
+        border-radius: 50%;
+        box-shadow: 0 0 0 44px rgba(255,255,255,.018), 0 0 0 88px rgba(255,255,255,.018);
+        content: "";
+        pointer-events: none;
+      }
+      .hero-copy, .hero-note { position: relative; z-index: 1; }
+      .hero-kicker {
+        margin: 0 0 18px;
+        color: #d5b897;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+      }
+      h1, h2, h3, p { margin-top: 0; }
+      h1 {
+        max-width: 680px;
+        margin-bottom: 18px;
+        font: 400 clamp(42px, 6vw, 72px)/1.02 var(--serif);
+        letter-spacing: -.035em;
+      }
+      .hero-lead {
+        max-width: 580px;
+        margin-bottom: 28px;
+        color: #e3dce4;
+        font-size: 17px;
+      }
+      .hero-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+      .button {
+        display: inline-flex;
+        min-height: 46px;
+        align-items: center;
+        justify-content: center;
+        padding: 0 18px;
+        border: 1px solid transparent;
+        border-radius: 3px;
+        font-size: 13px;
+        font-weight: 700;
+        text-decoration: none;
+        transition: background-color .18s ease, color .18s ease, border-color .18s ease;
+      }
+      .button-primary { background: #d6b793; color: #302330; }
+      .button-primary:hover { background: #e3c9a9; }
+      .button-quiet { border-color: rgba(255,255,255,.3); color: white; }
+      .button-quiet:hover { border-color: white; background: rgba(255,255,255,.08); }
+      .hero-note {
+        justify-self: end;
+        width: min(100%, 330px);
+        padding: 26px 25px 22px;
+        border: 1px solid rgba(230, 211, 190, .3);
+        background: rgba(255,255,255,.035);
+      }
+      .hero-note h2 {
+        margin-bottom: 18px;
+        color: #e7c8a1;
+        font: 400 25px/1.2 var(--serif);
+      }
+      .hero-note ol { margin: 0; padding: 0; list-style: none; counter-reset: journey; }
+      .hero-note li {
+        display: flex;
+        gap: 13px;
+        align-items: baseline;
+        padding: 10px 0;
+        border-top: 1px solid rgba(255,255,255,.13);
+        color: #f0eaf1;
+        font-size: 13px;
+      }
+      .hero-note li::before {
+        color: #d5b897;
+        content: "0" counter(journey);
+        counter-increment: journey;
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .guide-shell {
+        display: grid;
+        grid-template-columns: 220px minmax(0, 760px);
+        gap: clamp(42px, 8vw, 112px);
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 70px 30px 100px;
+        align-items: start;
+      }
+      .guide-nav {
+        position: sticky;
+        top: 28px;
+        padding: 5px 0 0 16px;
+        border-left: 1px solid var(--line);
+      }
+      .guide-nav p {
+        margin-bottom: 13px;
+        color: #8a7d89;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+      }
+      .guide-nav a {
+        display: block;
+        margin: 2px 0;
+        padding: 7px 10px;
+        border-left: 2px solid transparent;
+        color: var(--ink-soft);
+        font-size: 13px;
+        text-decoration: none;
+        transition: color .15s ease, border-color .15s ease;
+      }
+      .guide-nav a:hover, .guide-nav a[aria-current="location"] {
+        border-left-color: var(--champagne);
+        color: var(--plum-dark);
+      }
+      main { min-width: 0; }
+      .intro {
+        margin: 0 0 48px;
+        padding-bottom: 30px;
+        border-bottom: 1px solid var(--line);
+        color: var(--ink-soft);
+        font-size: 17px;
+      }
+      .guide-section { padding: 0 0 48px; margin-bottom: 42px; border-bottom: 1px solid var(--line); }
+      .section-label {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        margin-bottom: 10px;
+        color: var(--plum);
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .section-label::before { width: 22px; height: 1px; background: var(--champagne); content: ""; }
+      h2 {
+        margin-bottom: 14px;
+        font: 400 clamp(32px, 4vw, 43px)/1.12 var(--serif);
+        letter-spacing: -.025em;
+      }
+      h3 { margin: 30px 0 10px; font-size: 17px; line-height: 1.35; }
+      .guide-section > p, .guide-section li { color: var(--ink-soft); }
+      .guide-section p { margin-bottom: 13px; }
+      .guide-section ul, .guide-section ol { padding-left: 22px; }
+      .guide-section li { margin: 7px 0; padding-left: 4px; }
+      .guide-section li::marker { color: var(--champagne); font-weight: 700; }
+      .route-line {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 24px 0 8px;
+      }
+      .route-line span {
+        padding: 6px 10px;
+        border: 1px solid #e8dfe5;
+        border-radius: 2px;
+        background: #fff;
+        color: var(--plum-dark);
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .note {
+        margin: 20px 0;
+        padding: 16px 18px;
+        border-left: 3px solid var(--sage);
+        background: #edf2ef;
+        color: #435c52;
+        font-size: 14px;
+      }
+      .note strong { color: #314c41; }
+      .payment-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 20px; }
+      .payment-choice { padding: 18px 19px; border-top: 2px solid var(--champagne); background: #f4f0eb; }
+      .payment-choice h3 { margin: 0 0 8px; }
+      .payment-choice p { margin: 0; color: var(--ink-soft); font-size: 14px; }
+      .admin-list { margin: 22px 0 0; padding: 0 !important; list-style: none; }
+      .admin-list li { display: grid; grid-template-columns: 145px 1fr; gap: 18px; margin: 0; padding: 14px 0; border-top: 1px solid var(--line); }
+      .admin-list strong { color: var(--ink); font-size: 14px; }
+      .admin-list span { font-size: 14px; }
+      details {
+        border-top: 1px solid var(--line);
+        padding: 14px 0;
+      }
+      details:last-child { border-bottom: 1px solid var(--line); }
+      summary { cursor: pointer; color: var(--ink); font-weight: 650; }
+      details p { margin: 9px 0 0; color: var(--ink-soft); font-size: 14px; }
+      .closing {
+        padding: 28px;
+        background: var(--plum-dark);
+        color: white;
+      }
+      .closing h2 { margin-bottom: 8px; color: white; font-size: 31px; }
+      .closing p { margin-bottom: 15px; color: #e4dce5; font-size: 14px; }
+      .closing a { color: #f0d5b6; font-weight: 650; text-underline-offset: 3px; }
+      footer {
+        display: flex;
+        justify-content: space-between;
+        gap: 20px;
+        padding: 22px clamp(22px, 5vw, 76px);
+        border-top: 1px solid var(--line);
+        color: #817580;
+        font-size: 12px;
+      }
+
+      @media (max-width: 850px) {
+        .hero { grid-template-columns: 1fr; gap: 32px; padding-top: 66px; padding-bottom: 62px; }
+        .hero-note { justify-self: start; }
+        .guide-shell { grid-template-columns: 1fr; gap: 26px; padding: 38px 24px 70px; }
+        .guide-nav { position: static; overflow-x: auto; display: flex; gap: 4px; padding: 0 0 10px; border-left: 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
+        .guide-nav p { display: none; }
+        .guide-nav a { display: inline-block; margin: 0; padding: 7px 10px; border-left: 0; border-bottom: 2px solid transparent; }
+        .guide-nav a:hover, .guide-nav a[aria-current="location"] { border-left-color: transparent; border-bottom-color: var(--champagne); }
+      }
+      @media (max-width: 560px) {
+        .topbar { height: 62px; padding: 0 18px; }
+        .top-link { font-size: 12px; }
+        .hero { padding: 54px 22px 48px; }
+        h1 { font-size: 47px; }
+        .hero-lead { font-size: 15px; }
+        .hero-note { width: 100%; }
+        .guide-shell { padding-right: 20px; padding-left: 20px; }
+        .intro { font-size: 15px; }
+        .payment-choices { grid-template-columns: 1fr; }
+        .admin-list li { grid-template-columns: 1fr; gap: 2px; }
+        footer { flex-direction: column; gap: 4px; padding: 18px 20px; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="#top" aria-label="NgocThien Wedding, đầu trang">
+        <span class="brand-mark" aria-hidden="true">N</span>
+        <span>NgocThien Wedding</span>
+      </a>
+      <a class="top-link" href="https://github.com/VanPhuDai-22CT1/NgocThien_Wedding_DATN">Thông tin dự án <span aria-hidden="true">↗</span></a>
+    </header>
+
+    <div id="top" class="hero">
+      <div class="hero-copy">
+        <p class="hero-kicker">Cẩm nang sử dụng</p>
+        <h1>Mọi điều cần biết, trước ngày vui.</h1>
+        <p class="hero-lead">Từ lúc chọn dịch vụ đến khi theo dõi lịch cưới — hướng dẫn từng bước cho khách hàng và đội ngũ quản trị.</p>
+        <div class="hero-actions">
+          <a class="button button-primary" href="#khach-hang">Hướng dẫn khách hàng</a>
+          <a class="button button-quiet" href="#quan-tri">Dành cho quản trị viên</a>
+        </div>
+      </div>
+      <aside class="hero-note" aria-label="Quy trình đặt dịch vụ">
+        <h2>Một hành trình rõ ràng</h2>
+        <ol>
+          <li>Khám phá dịch vụ</li>
+          <li>Chọn ngày và gửi yêu cầu</li>
+          <li>Xác nhận đơn, chọn thanh toán</li>
+          <li>Theo dõi lịch trình</li>
+        </ol>
+      </aside>
+    </div>
+
+    <div class="guide-shell">
+      <nav class="guide-nav" aria-label="Mục lục hướng dẫn">
+        <p>Trong cẩm nang</p>
+        <a href="#bat-dau">Bắt đầu</a>
+        <a href="#tai-khoan">Tài khoản</a>
+        <a href="#khach-hang">Đặt dịch vụ</a>
+        <a href="#theo-doi">Theo dõi đơn</a>
+        <a href="#quan-tri">Quản trị</a>
+        <a href="#tro-giup">Trợ giúp</a>
+      </nav>
+
+      <main>
+        <p class="intro">Website kết nối khách hàng với các dịch vụ cưới và giúp đội ngũ quản trị theo dõi đơn hàng, lịch tư vấn, nội dung trang chủ trên cùng một hệ thống.</p>
+
+        <section class="guide-section" id="bat-dau">
+          <span class="section-label">Khởi động</span>
+          <h2>Bắt đầu từ đúng nơi</h2>
+          <p>Nếu bạn đang dùng bản local, website khách hàng thường ở cổng 3000, trang quản trị ở cổng 3001 và API ở cổng 5000. Trên Codespaces, mở tab <strong>Ports</strong> để truy cập các cổng đã chạy.</p>
+          <div class="route-line" aria-label="Các khu vực chính">
+            <span>Khách hàng · 3000</span><span>Quản trị · 3001</span><span>API · 5000</span>
+          </div>
+          <div class="note"><strong>Cần có dữ liệu:</strong> MySQL và backend phải hoạt động để đăng nhập, đặt dịch vụ và xem các danh sách.</div>
+        </section>
+
+        <section class="guide-section" id="tai-khoan">
+          <span class="section-label">Tài khoản</span>
+          <h2>Đăng ký, đăng nhập, khôi phục</h2>
+          <h3>Tạo tài khoản khách hàng</h3>
+          <ol>
+            <li>Mở <strong>Đăng nhập</strong>, sau đó chọn <strong>Đăng ký</strong>.</li>
+            <li>Điền tên người dùng, email, mật khẩu, số điện thoại và địa chỉ. Mật khẩu có ít nhất 6 ký tự; hai ô mật khẩu phải khớp.</li>
+            <li>Gửi biểu mẫu. Sau khi đăng ký thành công, đăng nhập bằng tài khoản vừa tạo.</li>
+          </ol>
+          <h3>Quên mật khẩu?</h3>
+          <p>Chọn <strong>Quên mật khẩu</strong>, nhập email, xác minh OTP rồi đặt mật khẩu mới. Email OTP cần máy chủ được cấu hình SMTP. Nếu thư chưa đến, kiểm tra thư rác hoặc liên hệ người vận hành.</p>
+          <div class="note"><strong>Quyền quản trị:</strong> đăng ký thông thường chỉ tạo tài khoản khách hàng. Tài khoản quản trị phải do người quản lý hệ thống cấp; không có mật khẩu mặc định công khai.</div>
+        </section>
+
+        <section class="guide-section" id="khach-hang">
+          <span class="section-label">Dành cho khách hàng</span>
+          <h2>Chọn dịch vụ và đặt lịch</h2>
+          <h3>Khám phá dịch vụ</h3>
+          <ol>
+            <li>Mở <strong>Dịch vụ</strong>, tìm theo tên hoặc chọn danh mục.</li>
+            <li>Vào trang chi tiết để xem mô tả, ảnh và giá.</li>
+            <li>Chọn số lượng nếu cần, nhấn <strong>Thêm vào giỏ hàng</strong> và tiếp tục chọn dịch vụ khác.</li>
+          </ol>
+          <h3>Rà soát giỏ hàng và thông tin</h3>
+          <p>Mở <strong>Gói đã chọn/Giỏ hàng</strong>, điều chỉnh số lượng hoặc bỏ mục không cần. Khi tiếp tục, nhập họ tên, số điện thoại và ngày cưới; có thể thêm email, địa điểm và ghi chú để đội ngũ nắm yêu cầu.</p>
+          <p>Ngày cưới phải cách ngày hiện tại ít nhất 2 ngày. Website kiểm tra lịch đã ghi nhận và báo nếu ngày đó đã đủ suất; hãy chọn ngày khác khi cần.</p>
+          <h3>Chọn cách thanh toán</h3>
+          <div class="payment-choices">
+            <article class="payment-choice"><h3>Thanh toán trực tiếp</h3><p>Thanh toán tổng đơn khi gặp nhân viên tư vấn hoặc chốt đơn.</p></article>
+            <article class="payment-choice"><h3>Chuyển khoản</h3><p>Mã QR hiển thị tiền cọc 10% giá trị đơn; phần còn lại thanh toán sau.</p></article>
+          </div>
+          <div class="note"><strong>Trước khi xác nhận:</strong> kiểm tra ngày cưới, số tiền và nội dung chuyển khoản trên màn hình. Đơn thành công sẽ mở trang hóa đơn để bạn xem mã đơn và trạng thái.</div>
+        </section>
+
+        <section class="guide-section" id="theo-doi">
+          <span class="section-label">Sau khi đặt</span>
+          <h2>Theo dõi đơn và lịch tư vấn</h2>
+          <ul>
+            <li>Đăng nhập rồi mở <strong>Đơn hàng</strong> để xem lịch sử và trạng thái xử lý.</li>
+            <li>Mở <strong>Thông báo</strong> để xem lịch tư vấn/đặt tiệc. Chọn một mục để xem chi tiết; một số lịch đang chờ có thể chỉnh sửa hoặc hủy ngay trên giao diện.</li>
+            <li>Nếu đơn chưa xuất hiện, kiểm tra kết nối mạng và trạng thái đăng nhập rồi tải lại trang. Tránh gửi lặp đơn khi chưa rõ yêu cầu trước đã được ghi nhận hay chưa.</li>
+          </ul>
+        </section>
+
+        <section class="guide-section" id="quan-tri">
+          <span class="section-label">Dành cho quản trị viên</span>
+          <h2>Vận hành website mỗi ngày</h2>
+          <p>Đăng nhập bằng tài khoản có vai trò quản trị tại cổng admin. Thanh điều hướng bên trái dẫn đến các công cụ dưới đây.</p>
+          <ul class="admin-list">
+            <li><strong>Tổng quan</strong><span>Xem tình hình dịch vụ, đơn hàng và lịch sắp tới; xuất báo cáo theo ngày, tháng, quý hoặc năm.</span></li>
+            <li><strong>Người dùng</strong><span>Tìm tài khoản, cập nhật hồ sơ, vai trò hoặc trạng thái. Kiểm tra kỹ trước khi xóa; không thể xóa tài khoản đang đăng nhập.</span></li>
+            <li><strong>Dịch vụ</strong><span>Tạo hoặc sửa tên, mô tả, giá, danh mục, số lượng và ảnh; đánh dấu dịch vụ nổi bật khi phù hợp.</span></li>
+            <li><strong>Ảnh trang chủ</strong><span>Cập nhật slider, ảnh nền, thư viện và ảnh tư vấn. Xem trước, lưu, rồi tải lại trang khách hàng để kiểm tra.</span></li>
+            <li><strong>Đơn hàng</strong><span>Kiểm tra thông tin đơn, cập nhật trạng thái xử lý và xóa theo đúng quy trình nội bộ.</span></li>
+            <li><strong>Tin nhắn</strong><span>Mở phiên trò chuyện, phản hồi khách và gửi gợi ý dịch vụ nếu cần.</span></li>
+            <li><strong>Lịch tư vấn</strong><span>Xem yêu cầu, cập nhật trạng thái xử lý để khách theo dõi.</span></li>
+            <li><strong>Lịch làm việc</strong><span>Xem lịch theo tháng và mở từng ngày để kiểm tra các sự kiện đã ghi nhận.</span></li>
+            <li><strong>Lịch sử</strong><span>Tra cứu các hoạt động được hệ thống ghi nhận và lọc theo mã người dùng.</span></li>
+          </ul>
+          <div class="note"><strong>Quyền hạn:</strong> chỉ cấp vai trò quản trị cho người cần thao tác với dữ liệu toàn hệ thống. Xác minh chuyển khoản thực tế theo quy trình của đơn vị trước khi ghi nhận.</div>
+        </section>
+
+        <section class="guide-section" id="tro-giup">
+          <span class="section-label">Khi cần trợ giúp</span>
+          <h2>Khắc phục nhanh</h2>
+          <details><summary>Danh sách trống hoặc báo lỗi tải dữ liệu</summary><p>Kiểm tra backend có đang chạy không, MySQL có hoạt động không và thông tin kết nối cơ sở dữ liệu có chính xác không.</p></details>
+          <details><summary>Không vào được trang quản trị</summary><p>Đăng nhập bằng tài khoản được cấp vai trò `admin`. Tài khoản khách hàng sẽ được đưa về khu vực khách hàng.</p></details>
+          <details><summary>Không nhận email OTP</summary><p>Kiểm tra thư rác, email nhập vào và cấu hình SMTP trên backend.</p></details>
+          <details><summary>Ảnh mới không hiển thị</summary><p>Kiểm tra định dạng/kích thước tệp và quyền ghi thư mục upload trên máy chủ.</p></details>
+          <details><summary>Không thể chọn ngày cưới</summary><p>Ngày phải cách hôm nay tối thiểu 2 ngày và vẫn còn suất theo lịch hệ thống.</p></details>
+          <details><summary>Giỏ hàng hoặc đơn chưa cập nhật</summary><p>Đăng nhập lại, tải mới trang và kiểm tra kết nối API. Không gửi lặp đơn khi chưa xác định kết quả lần trước.</p></details>
+        </section>
+
+        <section class="closing">
+          <h2>Chuẩn bị thật tốt cho ngày vui.</h2>
+          <p>Để chạy website hoặc xem mã nguồn, hãy mở README của dự án.</p>
+          <a href="https://github.com/VanPhuDai-22CT1/NgocThien_Wedding_DATN/blob/main/README.md">Đọc README dự án</a>
+        </section>
+      </main>
+    </div>
+
+    <footer><span>NgocThien Wedding · Cẩm nang sử dụng</span><span>Cập nhật 2026</span></footer>
+    <script>
+      const sections = document.querySelectorAll("main section[id]");
+      const links = document.querySelectorAll(".guide-nav a");
+      const byId = new Map([...links].map((link) => [link.hash.slice(1), link]));
+      if ("IntersectionObserver" in window) {
+        const observer = new IntersectionObserver((entries) => {
+          entries.forEach((entry) => {
+            if (!entry.isIntersecting) return;
+            links.forEach((link) => link.removeAttribute("aria-current"));
+            byId.get(entry.target.id)?.setAttribute("aria-current", "location");
+          });
+        }, { rootMargin: "-18% 0px -68% 0px" });
+        sections.forEach((section) => observer.observe(section));
+      }
+    </script>
+  </body>
+</html>
