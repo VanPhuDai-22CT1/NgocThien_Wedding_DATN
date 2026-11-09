@@ -2,6 +2,8 @@
 
 Website đặt dịch vụ cưới gồm giao diện khách hàng, giao diện quản trị và API backend.
 
+**Hướng dẫn sử dụng chi tiết:** [docs/USER_GUIDE.md](docs/USER_GUIDE.md) — dành cho khách hàng và quản trị viên.
+
 ## Công nghệ
 
 - Frontend: React, React Router, SCSS
