@@ -2,7 +2,7 @@
 
 Website đặt dịch vụ cưới gồm giao diện khách hàng, giao diện quản trị và API backend.
 
-**Cẩm nang trực tuyến:** [Mở trang hướng dẫn](https://vanphudai-22ct1.github.io/NgocThien_Wedding_DATN/).
+**Trang hướng dẫn:** [Mở giao diện HTML](docs/index.html). Để xuất bản thành website công khai, vào **Settings → Pages → Build and deployment**, chọn **GitHub Actions**, rồi chạy lại workflow **Publish user guide**.
 
 **Bản văn bản:** [docs/USER_GUIDE.md](docs/USER_GUIDE.md) — dành cho khách hàng và quản trị viên.
 
