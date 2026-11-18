@@ -14,7 +14,7 @@ Website đặt dịch vụ cưới gồm giao diện khách hàng, giao diện q
 
 ## Chạy local hoặc GitHub Codespaces
 
-Yêu cầu: Node.js 18 trở lên, npm và MySQL 8 trở lên.
+Yêu cầu: Node.js 24, npm và MySQL 8 trở lên.
 
 1. Tạo file cấu hình từ mẫu:
 
@@ -72,6 +72,12 @@ npm --prefix backend test
 ```
 
 Bộ kiểm thử dùng dữ liệu thử riêng và dọn theo ID của lượt chạy. Xem [báo cáo sửa lỗi và kiểm thử](docs/QA_REPORT.md) để biết phạm vi đã kiểm tra và các phần cần xác minh với dịch vụ bên ngoài.
+
+## GitHub Actions
+
+Workflow CI chạy hai job độc lập trên Node.js 24. Backend khởi tạo MySQL riêng trong runner, build TypeScript, khởi chạy API, đợi `/health` rồi chạy `npm --prefix backend test`. Cấu hình và khóa ký chỉ dùng cho môi trường thử; không cần secrets hay kết nối tới dữ liệu thật. Frontend chạy kiểm thử và build độc lập với kết quả backend.
+
+Workflow `Publish user guide` xuất bản thư mục `docs` lên GitHub Pages. Kho mới cần bật Pages với nguồn **GitHub Actions** một lần trong Settings; token của workflow không tự bật Pages cho kho chưa cấu hình.
 
 ## Cấu hình
 
