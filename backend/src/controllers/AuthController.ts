@@ -2,17 +2,24 @@ import { Response } from 'express';
 import jwt from 'jsonwebtoken';
 import { User } from '../models';
 import { AuthRequest } from '../middleware/auth';
+import { Op, UniqueConstraintError } from 'sequelize';
 
 class AuthController {
   async register(req: AuthRequest, res: Response) {
     try {
-      const { username, email, password, confirmPassword, full_name } = req.body;
+      const { password, confirmPassword, full_name, phone, address } = req.body;
+      const username = typeof req.body.username === 'string' ? req.body.username.trim() : '';
+      const email = typeof req.body.email === 'string' ? req.body.email.trim().toLowerCase() : '';
 
       if (!username || !email || !password) {
         return res.status(400).json({
           success: false,
           message: 'Username, email, and password are required',
         });
+      }
+
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 100 || username.length > 100 || typeof password !== 'string' || password.length < 6 || Buffer.byteLength(password, 'utf8') > 72) {
+        return res.status(400).json({ success: false, message: 'Email không hợp lệ hoặc mật khẩu phải từ 6 đến 72 byte.' });
       }
 
       if (password !== confirmPassword) {
@@ -22,11 +29,11 @@ class AuthController {
         });
       }
 
-      const existingUser = await User.findOne({ where: { email } });
+      const existingUser = await User.findOne({ where: { [Op.or]: [{ email }, { username }] } });
       if (existingUser) {
         return res.status(409).json({
           success: false,
-          message: 'Email already registered',
+          message: 'Email hoặc tên người dùng đã tồn tại',
         });
       }
 
@@ -35,6 +42,8 @@ class AuthController {
         email,
         password,
         full_name: full_name || '',
+        phone: phone || '',
+        address: address || '',
         role: 'user',
         is_active: true,
       });
@@ -60,6 +69,9 @@ class AuthController {
         },
       });
     } catch (error) {
+      if (error instanceof UniqueConstraintError) {
+        return res.status(409).json({ success: false, message: 'Email hoặc tên người dùng đã tồn tại' });
+      }
       console.error('Register error:', error);
       res.status(500).json({
         success: false,
@@ -70,9 +82,10 @@ class AuthController {
 
   async login(req: AuthRequest, res: Response) {
     try {
-      const { email, password } = req.body;
+      const { password } = req.body;
+      const email = typeof req.body.email === 'string' ? req.body.email.trim().toLowerCase() : '';
 
-      if (!email || !password) {
+      if (!email || typeof password !== 'string' || !password) {
         return res.status(400).json({
           success: false,
           message: 'Email and password are required',

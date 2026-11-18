@@ -1,18 +1,9 @@
-const PLACEHOLDER_IMAGE = "https://via.placeholder.com/400x400?text=No+Image";
+import { API_BASE_URL } from "utils/apiClient";
+
+const PLACEHOLDER_IMAGE = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400"><rect width="400" height="400" fill="#f3efeb"/><text x="200" y="200" text-anchor="middle" fill="#7b6b60" font-size="22">Chưa có ảnh</text></svg>');
 
 const getBackendBaseUrl = () => {
-  const envApi = process.env.REACT_APP_API_URL || "";
-  const envBase = envApi.replace(/\/api\/?$/, "");
-
-  if (typeof window !== "undefined") {
-    const { protocol, hostname } = window.location;
-    if (hostname === "localhost" || hostname === "127.0.0.1") {
-      return `${protocol}//${hostname}:5000`;
-    }
-    return envBase || window.location.origin;
-  }
-
-  return envBase || "http://localhost:5000";
+  return API_BASE_URL.replace(/\/api\/?$/i, "");
 };
 
 export const parseImageList = (value) => {

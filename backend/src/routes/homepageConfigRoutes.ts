@@ -7,7 +7,7 @@ import { authMiddleware, adminMiddleware } from '../middleware/auth';
 
 const router = Router();
 
-const uploadDir = path.resolve(process.cwd(), 'uploads');
+const uploadDir = path.resolve(__dirname, '..', '..', 'uploads');
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }

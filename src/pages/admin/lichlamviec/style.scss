@@ -1,3 +1,6 @@
+
+@layer nt-admin-legacy {
+:where(.nt-admin-body) {
 .work-calendar-admin {
   display: flex;
   min-height: 100vh;
@@ -513,4 +516,7 @@
       }
     }
   }
+}
+
+}
 }

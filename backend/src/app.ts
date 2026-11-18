@@ -17,7 +17,7 @@ app.use(securityHeaders);
 app.use(sameOriginWriteGuard);
 app.use(apiRateLimiter);
 app.use(corsMiddleware);
-app.use('/uploads', express.static(path.resolve(process.cwd(), 'uploads')));
+app.use('/uploads', express.static(path.resolve(__dirname, '..', 'uploads')));
 
 // Health check
 app.get('/health', (req: Request, res: Response) => {
@@ -28,7 +28,7 @@ app.get('/health', (req: Request, res: Response) => {
 app.get('/api', (req: Request, res: Response) => {
   res.json({
     success: true,
-    message: 'Ngọc Thiện Wedding API running on port ' + (process.env.PORT || 4000),
+    message: 'Ngọc Thiện Wedding API running on port ' + (process.env.PORT || 5000),
   });
 });
 

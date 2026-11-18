@@ -1,3 +1,6 @@
+
+@layer nt-admin-legacy {
+:where(.nt-admin-body) {
 $primary: #b71c1c;
 $primary-dark: #7b1e1e;
 $primary-light: #d32f2f;
@@ -117,10 +120,10 @@ $white: #ffffff;
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  width: auto !important;
+  width: auto;
   min-width: 0;
   max-width: max-content;
-  flex: 0 0 auto !important;
+  flex: 0 0 auto;
   margin-left: auto;
   line-height: 1;
   box-shadow: 0 4px 12px rgba(220, 38, 38, 0.28);
@@ -643,4 +646,7 @@ $white: #ffffff;
     grid-template-columns: 1fr;
     padding: 10px;
   }
+}
+
+}
 }

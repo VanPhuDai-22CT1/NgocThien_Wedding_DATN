@@ -1,3 +1,6 @@
+
+@layer nt-admin-legacy {
+:where(.nt-admin-body) {
 $rose-950: #4c0519;
 $rose-900: #881337;
 $rose-800: #9f1239;
@@ -958,4 +961,7 @@ $transition: all 0.28s ease;
       box-shadow: 0 0 0 4px rgba(244, 63, 94, 0.08);
     }
   }
+}
+
+}
 }

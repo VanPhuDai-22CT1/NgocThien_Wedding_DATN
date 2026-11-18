@@ -1,23 +1,11 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { NavLink, useNavigate } from "react-router-dom";
-import { getAuthItem, logoutAuthSession } from "utils/authStorage";
+
+import { useEffect, useMemo, useState } from "react";
+
+
 import { apiClient, buildAuthHeaders } from "utils/apiClient";
-import {
-  FaArrowLeft,
-  FaBell,
-  FaBox,
-  FaChartPie,
-  FaComments,
-  FaHistory,
-  FaImage,
-  FaRegCalendarAlt,
-  FaShoppingCart,
-  FaSignOutAlt,
-  FaUsers,
-} from "react-icons/fa";
+
 import "./style.scss";
 
-const API = `${process.env.REACT_APP_API_URL || "/api"}/legacy`;
 const WEEK_DAYS = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
 
 const toDateKey = (dateValue) => {
@@ -31,8 +19,8 @@ const toDateKey = (dateValue) => {
 };
 
 export default function WorkScheduleManagement() {
-  const navigate = useNavigate();
-  const role = getAuthItem("role");
+
+
 
   const [consultations, setConsultations] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -168,70 +156,19 @@ export default function WorkScheduleManagement() {
     });
   }, [currentMonth]);
 
-  const logout = () => {
-    logoutAuthSession("/");
-  };
+
 
   return (
     <div className="work-calendar-admin">
-      <aside className="sidebar">
-        <div className="logo">NGỌC THIỆN ADMIN</div>
 
-        <nav className="sidebar-nav">
-          <NavLink to="/dashboard">
-            <FaChartPie /> Tổng quan
-          </NavLink>
-
-          {role === "admin" && (
-            <NavLink to="/qlnguoidung">
-              <FaUsers /> Người dùng
-            </NavLink>
-          )}
-
-          <NavLink to="/qlsanpham">
-            <FaBox /> Dịch vụ
-          </NavLink>
-
-          <NavLink to="/qlhinhanh">
-            <FaImage /> Ảnh trang chủ
-          </NavLink>
-
-          <NavLink to="/qldonhang">
-            <FaShoppingCart /> Đơn hàng
-          </NavLink>
-
-          <NavLink to="/qltinnhan">
-            <FaComments /> Tin nhắn
-          </NavLink>
-
-          <NavLink to="/notification">
-            <FaBell /> Lịch tư vấn
-          </NavLink>
-
-          <NavLink to="/lichlamviec" className="active">
-            <FaRegCalendarAlt /> Lịch làm việc
-          </NavLink>
-
-          <NavLink to="/qlhoatdong">
-            <FaHistory /> Lịch sử
-          </NavLink>
-
-        </nav>
-
-        <button type="button" className="logout-btn" onClick={logout}>
-          <FaSignOutAlt /> Đăng xuất
-        </button>
-      </aside>
 
       <main className="content">
         <div className="page-head">
           <div className="page-head-copy">
-            <h2>📅 Lịch làm việc theo tháng</h2>
+            <h1>📅 Lịch làm việc theo tháng</h1>
             <p>Theo dõi nhanh các lịch đặt tiệc trong tháng và xem chi tiết theo từng ngày.</p>
           </div>
-          <button className="back-btn" onClick={() => navigate("/dashboard")}>
-            <FaArrowLeft /> Quay lại
-          </button>
+
         </div>
 
         <div className="schedule-summary">

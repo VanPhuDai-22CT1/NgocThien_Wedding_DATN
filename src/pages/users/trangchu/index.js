@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { Link } from "react-router-dom";
+import React, { useState, useEffect, useMemo } from "react";
+import { Link, useLocation } from "react-router-dom";
 import axios from "axios";
-import ChatBot from "../../../component/chatbot/index";
+import { API_BASE_URL, buildAuthHeaders } from "utils/apiClient";
 import { getAuthItem } from "utils/authStorage";
 import { addGuestCartItem } from "utils/guestCart";
 import { getImageUrl, getProductImage } from "utils/image";
@@ -22,28 +22,17 @@ import { notify } from "utils/notify";
 
 
 // ===== IMPORT ẢNH KHOẢNH KHẮC =====
-import nennb1 from "assets/users/images/hero/a1.jpg";
-import nennb2 from "assets/users/images/hero/a2.jpg";
-import nennb3 from "assets/users/images/hero/a3.jpg";
-import nennb4 from "assets/users/images/hero/a4.jpg";
-import nennb5 from "assets/users/images/hero/a5.jpg";
-import nennb6 from "assets/users/images/hero/a6.jpg";
-import nennb7 from "assets/users/images/hero/a7.jpg";
 
 // ===== AVATAR KHÁCH HÀNG =====
 // avatar images removed (testimonials deleted)
 
-const API_BASE = "/api";
-const CUSTOMIZE_API = `${API_BASE}/homepage-config`;
+const API_BASE = API_BASE_URL;
 
-const toSiteImageUrl = (path) => {
-  if (!path) return "";
-  if (path.startsWith("http")) return path;
-  return `/${path.replace(/^\/+/, "")}`;
-};
 
 const HomePage = () => {
   useScrollReveal();
+  const { hash } = useLocation();
+  useEffect(() => { if (hash) document.getElementById(hash.slice(1))?.scrollIntoView({ block: "start" }); }, [hash]);
 
   const [products, setProducts] = useState([]);
   const [featuredProducts, setFeaturedProducts] = useState([]);
@@ -52,59 +41,12 @@ const HomePage = () => {
   const [aiError, setAiError] = useState("");
   const [, setCart] = useState([]);
   const [showProducts] = useState(true);
-  const [previewImg, setPreviewImg] = useState(null);
   const [showTeamInfo, setShowTeamInfo] = useState(false);
   const [showQualityInfo, setShowQualityInfo] = useState(false);
   const [showPriceInfo, setShowPriceInfo] = useState(false);
   const [showSupportInfo, setShowSupportInfo] = useState(false);
   const [showRatingInfo, setShowRatingInfo] = useState(false);
   const [showGiftInfo, setShowGiftInfo] = useState(false);
-  const [homepageImages, setHomepageImages] = useState({
-    galleryImages: Array(7).fill(""),
-    consultImage: "",
-  });
-
-  const resolvedGalleryImages = useMemo(() => [
-    toSiteImageUrl(homepageImages.galleryImages[0]) || nennb1,
-    toSiteImageUrl(homepageImages.galleryImages[1]) || nennb2,
-    toSiteImageUrl(homepageImages.galleryImages[2]) || nennb3,
-    toSiteImageUrl(homepageImages.galleryImages[3]) || nennb4,
-    toSiteImageUrl(homepageImages.galleryImages[4]) || nennb5,
-    toSiteImageUrl(homepageImages.galleryImages[5]) || nennb6,
-    toSiteImageUrl(homepageImages.galleryImages[6]) || nennb7,
-  ], [homepageImages.galleryImages]);
-
-  const consultImage = useMemo(
-    () => toSiteImageUrl(homepageImages.consultImage) || nennb2,
-    [homepageImages.consultImage]
-  );
-
-  // ===== CONSULT FORM STATE =====
-  const [consultData, setConsultData] = useState({
-    name: "",
-    email: "",
-    phone: "",
-    service: "",
-    date: "",
-    note: "",
-    agree: false,
-  });
-  const [bookedDates, setBookedDates] = useState([]);
-
-  const formatDateInput = (date) => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
-  };
-
-  const minEventDate = useMemo(() => {
-    const minDate = new Date();
-    minDate.setDate(minDate.getDate() + 2);
-    return formatDateInput(minDate);
-  }, []);
-
-  const bookedDateSet = useMemo(() => new Set(bookedDates), [bookedDates]);
   const displayProducts = useMemo(
     () => (featuredProducts.length > 0 ? featuredProducts : products),
     [featuredProducts, products]
@@ -118,78 +60,6 @@ const HomePage = () => {
     });
     return map;
   }, [displayProducts]);
-
-  const handleChange = useCallback((e) => {
-    const { name, value, type, checked } = e.target;
-    setConsultData((current) => ({
-      ...current,
-      [name]: type === "checkbox" ? checked : value,
-    }));
-  }, []);
-
-  const handleSubmitConsult = async (e) => {
-  e.preventDefault();
-
-  if (!consultData.agree) {
-    notify.info("Bạn cần đồng ý điều khoản");
-    return;
-  }
-
-  if (!consultData.date) {
-    notify.info("Vui lòng chọn ngày tổ chức tiệc");
-    return;
-  }
-
-  if (consultData.date < minEventDate) {
-    notify.info("Ngày đặt tiệc phải cách ngày hiện tại ít nhất 2 ngày.");
-    return;
-  }
-
-  if (bookedDateSet.has(consultData.date)) {
-    notify.info("Ngày này đã có tiệc, vui lòng chọn ngày khác");
-    return;
-  }
-
-  try {
-    const res = await axios.post(
-      `${API_BASE}/legacy`,
-      {
-        action: "addConsultation",
-        user_id: Number(getAuthItem("user_id") || 0) || null,
-        name: consultData.name,
-        email: consultData.email,
-        phone: consultData.phone,
-        service: consultData.service,
-        event_date: consultData.date,
-        note: consultData.note,
-      },
-      { headers: { "Content-Type": "application/json" } }
-    );
-
-    if (res.data.success) {
-      notify.info("Gửi thông tin thành công!");
-      const bookedRes = await axios.get(`${API_BASE}/legacy?action=getBookedEventDates`);
-      if (bookedRes.data?.success) {
-        setBookedDates((bookedRes.data.data || []).map((item) => item.event_date));
-      }
-    } else {
-      notify.info(res.data?.message || "Gửi thất bại!");
-    }
-
-  } catch (error) {
-    notify.info("Lỗi kết nối server!");
-  }
-
-  setConsultData({
-    name: "",
-    email: "",
-    phone: "",
-    service: "",
-    date: "",
-    note: "",
-    agree: false,
-  });
-};
 
 useEffect(() => {
   if (!showTeamInfo && !showQualityInfo && !showPriceInfo && !showSupportInfo && !showRatingInfo && !showGiftInfo) return undefined;
@@ -208,50 +78,6 @@ useEffect(() => {
   window.addEventListener("keydown", handleEsc);
   return () => window.removeEventListener("keydown", handleEsc);
 }, [showTeamInfo, showQualityInfo, showPriceInfo, showSupportInfo, showRatingInfo, showGiftInfo]);
-
-  useEffect(() => {
-    const controller = new AbortController();
-
-    axios
-      .get(`${CUSTOMIZE_API}?action=getHomepageImages`, { signal: controller.signal })
-      .then((res) => {
-        if (res.data?.success) {
-          const data = res.data.data || {};
-          const gallery = Array.isArray(data.galleryImages)
-            ? [...data.galleryImages, ...Array(7).fill("")].slice(0, 7)
-            : Array(7).fill("");
-
-          setHomepageImages({
-            galleryImages: gallery,
-            consultImage: data.consultImage || "",
-          });
-        }
-      })
-      .catch((err) => {
-        if (axios.isCancel(err)) return;
-        console.error("Load homepage images error:", err);
-      });
-
-    return () => controller.abort();
-  }, []);
-
-  useEffect(() => {
-    const controller = new AbortController();
-
-    axios
-      .get(`${API_BASE}/legacy?action=getBookedEventDates`, { signal: controller.signal })
-      .then((res) => {
-        if (res.data?.success) {
-          setBookedDates((res.data.data || []).map((item) => item.event_date));
-        }
-      })
-      .catch((err) => {
-        if (axios.isCancel(err)) return;
-        console.error("Load booked dates error:", err);
-      });
-
-    return () => controller.abort();
-  }, []);
 
   const loadAiRecommendations = async (fallbackProducts = [], signal) => {
     try {
@@ -347,7 +173,7 @@ const addToCart = (productId) => {
         quantity: 1,
         userId: userId
       },
-      { headers: { "Content-Type": "application/json" } }
+      { headers: { "Content-Type": "application/json", ...buildAuthHeaders() } }
     )
     .then((res) => {
       if (res.data.success) {
@@ -371,7 +197,7 @@ const addToCart = (productId) => {
         action: "getCart",
         userId,
       },
-      { signal }
+      { signal, headers: buildAuthHeaders() }
     )
     .then((res) => {
       if (res.data.success) setCart(res.data.cart);
@@ -830,12 +656,12 @@ const addToCart = (productId) => {
                           -{discountByProductId.get(product.id)}%
                         </div>
                       )}
-                      <img
+                      <img loading="lazy" decoding="async"
                         src={getImageUrl(getProductImage(product))}
                         alt={product.name}
                         onError={(e) =>
                           (e.target.src =
-                            "https://via.placeholder.com/400x400?text=No+Image")
+                            getImageUrl(null))
                         }
                       />
 
@@ -920,12 +746,12 @@ const addToCart = (productId) => {
                   <div className="product-card reveal-item ai-card" key={`ai-${product.id}`}>
                     <div className="product-image-container">
                       <div className="ai-badge">AI Gợi Ý</div>
-                      <img
+                      <img loading="lazy" decoding="async"
                         src={getImageUrl(getProductImage(product))}
                         alt={product.name}
                         onError={(e) =>
                           (e.target.src =
-                            "https://via.placeholder.com/400x400?text=No+Image")
+                            getImageUrl(null))
                         }
                       />
 
@@ -965,166 +791,8 @@ const addToCart = (productId) => {
       </section>
 
 
-      {/* ================= KHOẢNH KHẮC ĐÁNG NHỚ ================= */}
-     <section className="memories-section reveal">
-        <div className="memories-wrapper">
-         <div className="memories-header">
-        <section className="title-wrapper">
-          <h2 className="section-title">Những Sản Phẩm Nổi Bật</h2>
-        </section>
-
-      
-
-      </div>
-
-
-          <div className="memories-grid">
-            <div
-            className="memory-item item-large"
-              onClick={() => setPreviewImg(resolvedGalleryImages[0])}
-          >
-              <img src={resolvedGalleryImages[0]} alt="Khoảnh khắc 1" />
-          </div>
-
-            <div className="memory-item" onClick={() => setPreviewImg(resolvedGalleryImages[1])}>
-              <img src={resolvedGalleryImages[1]} alt="Khoảnh khắc 2" />
-          </div>
-
-            <div className="memory-item" onClick={() => setPreviewImg(resolvedGalleryImages[2])}>
-              <img src={resolvedGalleryImages[2]} alt="Khoảnh khắc 3" />
-          </div>
-
-            <div className="memory-item item-wide" onClick={() => setPreviewImg(resolvedGalleryImages[3])}>
-              <img src={resolvedGalleryImages[3]} alt="Khoảnh khắc 4" />
-          </div>
-
-            <div className="memory-item" onClick={() => setPreviewImg(resolvedGalleryImages[4])}>
-              <img src={resolvedGalleryImages[4]} alt="Khoáº£nh kháº¯c 5" />
-          </div>
-
-            <div className="memory-item" onClick={() => setPreviewImg(resolvedGalleryImages[5])}>
-              <img src={resolvedGalleryImages[5]} alt="Khoáº£nh kháº¯c 6" />
-          </div>
-
-            <div className="memory-item item-wide" onClick={() => setPreviewImg(resolvedGalleryImages[6])}>
-              <img src={resolvedGalleryImages[6]} alt="Khoáº£nh kháº¯c 7" />
-          </div>
-
-
-          </div>
-        </div>
-      </section>
-
       {/* Testimonial section removed per request */}
 
- <section className="commit-section">
-        <div className="commit-wrapper">
-          <div className="consult-wrapper">
-
-            <div className="consult-form-box">
-              <h2 className="section-title">
-                Bắt Đầu Hành Trình <br />
-                <span>Của Bạn</span>
-              </h2>
-
-              <form className="consult-form" onSubmit={handleSubmitConsult}>
-
-                <input
-                  type="text"
-                  name="name"
-                  placeholder="Họ và tên *"
-                  value={consultData.name}
-                  onChange={handleChange}
-                  required
-                />
-
-                <input
-                  type="email"
-                  name="email"
-                  placeholder="Email *"
-                  value={consultData.email}
-                  onChange={handleChange}
-                  required
-                />
-
-                <input
-                  type="tel"
-                  name="phone"
-                  placeholder="Số điện thoại *"
-                  value={consultData.phone}
-                  onChange={handleChange}
-                  required
-                />
-
-                <select
-                  name="service"
-                  value={consultData.service}
-                  onChange={handleChange}
-                  required
-                >
-                  <option value="">Chọn gói dịch vụ</option>
-                  <option value="Chụp ảnh cưới">Chụp ảnh cưới</option>
-                  <option value="Trang trí tiệc cưới">Trang trí tiệc cưới</option>
-                  <option value="Tổ chức trọn gói">Tổ chức trọn gói</option>
-                </select>
-
-                <input
-                  type="date"
-                  name="date"
-                  min={minEventDate}
-                  value={consultData.date}
-                  onChange={handleChange}
-                  required
-                />
-
-                {consultData.date && bookedDateSet.has(consultData.date) && (
-                  <p className="booked-date-warning">
-                    Ngày này đã có tiệc, vui lòng chọn ngày khác.
-                  </p>
-                )}
-
-                <textarea
-                  rows="4"
-                  name="note"
-                  placeholder="Ghi chú thêm"
-                  value={consultData.note}
-                  onChange={handleChange}
-                />
-
-                <label className="terms-checkbox">
-                  <input
-                    type="checkbox"
-                    name="agree"
-                    checked={consultData.agree}
-                    onChange={handleChange}
-                  />
-                  Tôi đồng ý điều khoản
-                </label>
-
-                <button type="submit" className="consult-btn">
-                  Gửi Thông Tin
-                </button>
-
-              </form>
-            </div>
-
-            <div className="consult-image">
-              <img src={consultImage} alt="Wedding consult" />
-            </div>
-
-          </div>
-        </div>
-      </section>
-
-      {previewImg && (
-        <div
-          className="image-preview-overlay"
-          onClick={() => setPreviewImg(null)}
-        >
-          <img src={previewImg} alt="Preview" />
-        </div>
-      )}
-      <ChatBot />
     </div>
   );
 };

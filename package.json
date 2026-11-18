@@ -34,10 +34,10 @@
     "web-vitals": "^2.1.4"
   },
   "scripts": {
-    "start": "react-app-rewired start",
-    "start:admin": "set PORT=3001 && set REACT_APP_APP_MODE=admin && react-app-rewired start",
-    "start:user": "set PORT=3000 && react-app-rewired start",
-    "start:all": "concurrently \"cd backend && npm run dev\" \"npm run start:admin\" \"npm run start:user\"",
+    "start": "node scripts/start-frontend.js user",
+    "start:admin": "node scripts/start-frontend.js admin",
+    "start:user": "node scripts/start-frontend.js user",
+    "start:all": "concurrently --kill-others-on-fail \"npm --prefix backend run dev\" \"npm run start:admin\" \"npm run start:user\"",
     "build": "react-app-rewired build",
     "test": "react-app-rewired test",
     "eject": "react-scripts eject"

@@ -3,6 +3,7 @@ import ReviewController from '../controllers/ReviewController';
 import { authMiddleware, adminMiddleware } from '../middleware/auth';
 
 const router = Router();
+router.get('/product/:productId/eligibility', authMiddleware, (req, res) => ReviewController.getEligibility(req, res));
 
 router.get('/product/:productId', (req, res) =>
   ReviewController.getProductReviews(req, res)

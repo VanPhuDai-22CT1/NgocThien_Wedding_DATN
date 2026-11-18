@@ -1,711 +1,162 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { FaRegStar, FaStar } from "react-icons/fa";
+import ProductReviews from "component/WeddingCatalog/ProductReviews";
+import React, { useEffect, useRef, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { apiClient } from "utils/apiClient";
 import { getAuthItem } from "utils/authStorage";
+import { getImageUrl } from "utils/image";
+import { minBookingDate } from "utils/bookingRules";
 import { addGuestCartItem } from "utils/guestCart";
-import { apiClient, buildAuthHeaders } from "utils/apiClient";
-import { getImageUrl, getProductImage, parseImageList } from "utils/image";
+import { SAMPLE_PRODUCTS, normalizeProduct, formatPrice } from "utils/weddingCatalog";
+import { CatalogDialog, QuoteDialog, WeddingCard } from "component/WeddingCatalog";
+import ProductDescription from "component/WeddingCatalog/ProductDescription";
 import "./style.scss";
-import { notify } from "utils/notify";
-
-const fallbackImage = "https://via.placeholder.com/1000x700?text=No+Image";
-
-const formatCurrency = (value) =>
-  `${Number(value || 0).toLocaleString("vi-VN")} VNĐ`;
-
-const DESCRIPTION_HEADINGS = [
-  "Mô tả chi tiết",
-  "Bảng giá tham khảo theo khoảng cách",
-  "Dịch vụ bao gồm",
-  "Nâng cấp thêm",
-  "Các dòng xe khác",
-  "Điểm nổi bật",
-  "Mô tả ngắn",
-  "Phù hợp cho",
-  "Ưu đãi",
-];
-
-const splitDescriptionItems = (text) =>
-  String(text || "")
-    .split(/\.\s*/)
-    .map((item) => item.trim().replace(/\.$/, ""))
-    .filter(Boolean);
-
-const getKnownSectionRows = (title, text) => {
-  const normalizedTitle = String(title || "").toLowerCase();
-  const source = String(text || "");
-
-  if (normalizedTitle.includes("khoảng cách")) {
-    return [
-      ["Nội thành", "Dưới 20km", "2.500.000 VNĐ"],
-      ["Gói tiêu chuẩn", "20 - 50km", "3.500.000 VNĐ"],
-      ["Gói mở rộng", "50 - 100km", "5.000.000 VNĐ"],
-      ["Gói liên huyện", "100 - 150km", "6.500.000 VNĐ"],
-      ["Gói liên tỉnh", "150 - 250km", "8.500.000 VNĐ"],
-      ["Trên 250km", "Báo giá riêng", "Liên hệ"],
-    ].filter((row) => source.includes(row[0]));
-  }
-
-  if (normalizedTitle.includes("dòng xe")) {
-    return [
-      ["VinFast Lux A2.0", "2.500.000đ"],
-      ["VinFast VF8", "3.500.000đ"],
-      ["Kia Carnival", "4.000.000đ"],
-      ["Toyota Camry", "3.000.000đ"],
-      ["Mercedes C-Class", "5.500.000đ"],
-      ["Mercedes E-Class", "7.000.000đ"],
-      ["BMW Series 5", "7.500.000đ"],
-      ["Lexus ES250", "8.000.000đ"],
-      ["Mercedes S-Class", "12.000.000đ"],
-      ["BMW 7 Series", "15.000.000đ"],
-    ].filter((row) => source.includes(row[0]));
-  }
-
-  return [];
-};
-
-const buildDescriptionSections = (description) => {
-  const raw = String(description || "").trim();
-  if (!raw) return [];
-
-  const escapedHeadings = DESCRIPTION_HEADINGS.map((heading) =>
-    heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-  ).join("|");
-  const headingRegex = new RegExp(`(${escapedHeadings})`, "g");
-  const normalized = raw
-    .replace(/\s+/g, " ")
-    .replace(headingRegex, "\n$1\n")
-    .split("\n")
-    .map((part) => part.trim())
-    .filter(Boolean);
-
-  const sections = [];
-  let current = { title: "", content: "" };
-
-  normalized.forEach((part) => {
-    if (DESCRIPTION_HEADINGS.includes(part)) {
-      if (current.title || current.content) sections.push(current);
-      current = { title: part, content: "" };
-      return;
-    }
-
-    current.content = current.content ? `${current.content} ${part}` : part;
-  });
-
-  if (current.title || current.content) sections.push(current);
-  return sections;
-};
-
-const renderStarIcons = (rating, interactive = false, onSelect) =>
-  Array.from({ length: 5 }, (_, index) => {
-    const starValue = index + 1;
-    const filled = starValue <= rating;
-    const Icon = filled ? FaStar : FaRegStar;
-
-    if (!interactive) {
-      return <Icon key={starValue} className={`star ${filled ? "filled" : ""}`} />;
-    }
-
-    return (
-      <button
-        type="button"
-        key={starValue}
-        className={`star-button ${filled ? "filled" : ""}`}
-        onClick={() => onSelect(starValue)}
-        aria-label={`Chọn ${starValue} sao`}
-      >
-        <Icon />
-      </button>
-    );
-  });
-
-const isCompletedOrderStatus = (status) => {
-  const normalized = String(status || "").trim().toLowerCase();
-  return [
-    "delivered",
-    "completed",
-    "đã giao sự kiện",
-    "đã bàn giao sự kiện",
-    "da giao su kien",
-    "da ban giao su kien",
-    "đã nhận hàng",
-    "da nhan hang",
-  ].includes(normalized);
-};
 
 const ProductDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-
   const [product, setProduct] = useState(null);
-  const [mainImage, setMainImage] = useState("");
+  const [related, setRelated] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [quantity, setQuantity] = useState(1);
-  const [favorite, setFavorite] = useState(false);
-  const [showPreview, setShowPreview] = useState(false);
+  const [error, setError] = useState("");
+  const [retry, setRetry] = useState(0);
+  const [selectedImage, setSelectedImage] = useState(0);
+  const [zoom, setZoom] = useState(false);
+  const [quote, setQuote] = useState(null);
+  const [selection, setSelection] = useState({ package_id: "", color: "", event_date: "", location: "", note: "" });
+  const [quantity, setQuantity] = useState("1");
+  const [errors, setErrors] = useState({});
   const [reviews, setReviews] = useState([]);
-  const [reviewLoading, setReviewLoading] = useState(true);
-  const [reviewError, setReviewError] = useState("");
-  const [submittingReview, setSubmittingReview] = useState(false);
-  const [reviewForm, setReviewForm] = useState({ rating: 5, comment: "" });
-  const [reviewEligibility, setReviewEligibility] = useState({
-    loading: true,
-    canReview: false,
-    message: "Đăng nhập và sử dụng dịch vụ hoàn tất để đánh giá.",
-  });
+  const [cartStatus, setCartStatus] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+  const fieldsRef = useRef(null);
 
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: "auto" });
-  }, [id]);
-
-  useEffect(() => {
-    const fetchProduct = async () => {
+    const controller = new AbortController();
+    setLoading(true); setError(""); setProduct(null); setRelated([]); setReviews([]);
+    setSelectedImage(0); setQuote(null); setZoom(false); setCartStatus(null);
+    setQuantity("1"); setErrors({});
+    const load = async () => {
       try {
-        setLoading(true);
-        setReviewLoading(true);
-        setReviewError("");
-
-        const response = await apiClient.get(`/products/${id}`);
-        const selected = response.data?.data || null;
-
-        if (!selected) {
-          setProduct(null);
-          return;
+        let current; let catalog;
+        if (id.startsWith("mau-")) { current = SAMPLE_PRODUCTS.find((p) => p.id === id); catalog = SAMPLE_PRODUCTS; }
+        else {
+          const [detail, list] = await Promise.all([
+            apiClient.get(`/products/${encodeURIComponent(id)}`, { signal: controller.signal }),
+            apiClient.get("/legacy", { params: { action: "getProducts" }, signal: controller.signal }).catch(() => null),
+          ]);
+          if (!detail.data.success || !detail.data.data) throw new Error("Missing product");
+          current = normalizeProduct(detail.data.data); catalog = (list?.data?.data || []).map(normalizeProduct);
+          if (!controller.signal.aborted) setReviews(detail.data.data.ProductReviews || []);
         }
-
-        setProduct(selected);
-        const images = parseImageList(selected.image_urls || selected.images);
-        setMainImage(images[0] || getProductImage(selected));
-      } catch (error) {
-        console.error("Load product detail error:", error);
-        setProduct(null);
-      } finally {
-        setLoading(false);
-      }
-
-      try {
-        const reviewResponse = await apiClient.get(`/reviews/product/${id}`);
-        setReviews(reviewResponse.data?.data || []);
-      } catch (error) {
-        console.error("Load product reviews error:", error);
-        setReviews([]);
-        setReviewError("Chưa tải được đánh giá, bạn vẫn có thể xem thông tin dịch vụ.");
-      } finally {
-        setReviewLoading(false);
-      }
+        if (controller.signal.aborted) return;
+        if (!current) { setError("Mẫu bạn tìm không còn trong danh mục."); return; }
+        setProduct(current);
+        setSelection({ package_id: "", color: current.colors[0] || "", event_date: "", location: "", note: "" });
+        setRelated(catalog.filter((p) => p.category === current.category && p.id !== current.id).slice(0, 3));
+      } catch (err) {
+        if (!controller.signal.aborted) setError(err.response?.status === 404 ? "Không tìm thấy sản phẩm này." : "Không thể tải chi tiết. Vui lòng kiểm tra kết nối và thử lại.");
+      } finally { if (!controller.signal.aborted) setLoading(false); }
     };
+    load();
+    return () => controller.abort();
+  }, [id, retry]);
 
-    fetchProduct();
-  }, [id]);
-
-  useEffect(() => {
-    const checkReviewEligibility = async () => {
-      const storedUserId = getAuthItem("user_id");
-      const token = getAuthItem("token");
-
-      if (!storedUserId || !token) {
-        setReviewEligibility({
-          loading: false,
-          canReview: false,
-          message: "Bạn cần đăng nhập và có đơn dịch vụ đã hoàn tất để đánh giá.",
-        });
-        return;
-      }
-
-      try {
-        setReviewEligibility((prev) => ({ ...prev, loading: true }));
-        const response = await apiClient.get(`/orders/user/${storedUserId}`, {
-          headers: buildAuthHeaders(),
-        });
-        const orders = response.data?.orders || [];
-        const productId = Number(id);
-        const hasCompletedOrder = orders.some((order) => {
-          if (!isCompletedOrderStatus(order.status)) return false;
-          const items = order.OrderItems || order.details || [];
-          return items.some((item) => {
-            const itemProductId =
-              item.product_id || item.productId || item.Product?.id || item.product?.id;
-            return Number(itemProductId) === productId;
-          });
-        });
-        const alreadyReviewed = reviews.some(
-          (review) => Number(review.user_id) === Number(storedUserId)
-        );
-
-        setReviewEligibility({
-          loading: false,
-          canReview: hasCompletedOrder && !alreadyReviewed,
-          message: alreadyReviewed
-            ? "Bạn đã đánh giá dịch vụ này rồi."
-            : hasCompletedOrder
-            ? "Bạn có thể đánh giá dịch vụ này."
-            : "Chỉ khách đã sử dụng dịch vụ và đơn đã hoàn tất mới được đánh giá.",
-        });
-      } catch (error) {
-        console.error("Check review eligibility error:", error);
-        setReviewEligibility({
-          loading: false,
-          canReview: false,
-          message: "Chưa kiểm tra được điều kiện đánh giá. Vui lòng thử lại sau.",
-        });
-      }
-    };
-
-    checkReviewEligibility();
-  }, [id, reviews]);
-
-  const loadReviews = async () => {
-    try {
-      setReviewLoading(true);
-      setReviewError("");
-      const response = await apiClient.get(`/reviews/product/${id}`);
-      const nextReviews = response.data?.data || [];
-      const nextSummary = response.data?.summary || {};
-
-      setReviews(nextReviews);
-      setProduct((prev) =>
-        prev
-          ? {
-              ...prev,
-              average_rating: Number(nextSummary.average_rating || 0),
-              review_count: Number(nextSummary.review_count || nextReviews.length || 0),
-            }
-          : prev
-      );
-    } catch (error) {
-      console.error("Load reviews error:", error);
-      setReviewError("Chưa tải được đánh giá, bạn vẫn có thể xem thông tin dịch vụ.");
-    } finally {
-      setReviewLoading(false);
-    }
+  const packages = product?.packages || [];
+  const selectedPackage = packages.find((item) => item.id === selection.package_id);
+  const price = Number(packages.length ? selectedPackage?.price : product?.price) || 0;
+  const unit = selectedPackage?.unit || product?.unit;
+  const change = (event) => {
+    const { name, value } = event.target;
+    setSelection((previous) => ({ ...previous, [name]: value }));
+    setErrors((previous) => ({ ...previous, [name]: "" })); setCartStatus(null);
   };
-
-  const productImages = useMemo(() => {
-    if (!product) return [];
-    const gallery = parseImageList(product.image_urls || product.images);
-    const cover = getProductImage(product);
-    const images = gallery.length ? gallery : [cover];
-    return [...new Set(images.filter(Boolean))];
-  }, [product]);
-
-  const descriptionSections = useMemo(
-    () => buildDescriptionSections(product?.description),
-    [product]
-  );
-
-  const averageRating = Number(product?.average_rating || 0);
-  const reviewCount = Number(product?.review_count || reviews.length || 0);
-  const hasStockLimit = Number(product?.stock || 0) > 0;
-
-  const increaseQty = () => {
-    setQuantity((prev) => {
-      const next = Number(prev || 1) + 1;
-      return hasStockLimit ? Math.min(next, Number(product.stock)) : next;
-    });
-  };
-
-  const decreaseQty = () => {
-    setQuantity((prev) => Math.max(1, Number(prev || 1) - 1));
-  };
-
-  const addToCart = async () => {
-    const storedUserId = getAuthItem("user_id");
-    const item = {
-      productId: Number(product.id),
-      name: product.name,
-      price: Number(product.price || 0),
-      cover: getProductImage(product),
-    };
-
-    if (!storedUserId) {
-      addGuestCartItem(item, Number(quantity || 1));
-      notify.info("Đã thêm dịch vụ vào giỏ hàng!");
-      return true;
-    }
-
-    try {
-      const response = await apiClient.post(
-        "/cart",
-        {
-          userid: Number(storedUserId),
-          productId: Number(product.id),
-          quantity: Number(quantity),
-        },
-        { headers: buildAuthHeaders() }
-      );
-
-      if (response.data?.success) {
-        notify.info("Đã thêm dịch vụ vào giỏ hàng!");
-        return true;
-      }
-
-      notify.info(response.data?.message || "Thêm dịch vụ thất bại!");
-      return false;
-    } catch (error) {
-      console.error("Add cart error:", error);
-      notify.info("Có lỗi xảy ra khi thêm dịch vụ vào giỏ hàng!");
+  const validate = () => {
+    const next = {};
+    if (packages.length && !selectedPackage) next.package_id = "Vui lòng chọn loại gói.";
+    if (product.colors.length && !product.colors.includes(selection.color)) next.color = "Vui lòng chọn tông màu.";
+    if (!Number.isSafeInteger(Number(quantity)) || Number(quantity) < 1 || Number(quantity) > 999) next.quantity = "Nhập số lượng nguyên từ 1 đến 999.";
+    if (!selection.event_date || selection.event_date < minBookingDate()) next.event_date = "Chọn ngày tổ chức cách hôm nay ít nhất 3 ngày.";
+    if (!selection.location.trim()) next.location = "Vui lòng nhập địa điểm tổ chức.";
+    setErrors(next);
+    if (Object.keys(next).length) {
+      fieldsRef.current?.querySelector(`[name="${Object.keys(next)[0]}"]`)?.focus();
       return false;
     }
+    return true;
   };
-
-  const buyNow = async () => {
-    const added = await addToCart();
-    if (added) navigate("/giohang");
-  };
-
-  const submitReview = async () => {
-    const storedUserId = getAuthItem("user_id");
-    const username = getAuthItem("username") || "Khách hàng";
-
-    if (!storedUserId) {
-      notify.info("Vui lòng đăng nhập để gửi đánh giá!");
-      navigate("/login");
-      return;
-    }
-
-    if (!reviewEligibility.canReview) {
-      notify.info(reviewEligibility.message);
-      return;
-    }
-
-    if (!reviewForm.comment.trim()) {
-      notify.info("Vui lòng nhập nội dung đánh giá!");
-      return;
-    }
-
+  const purchase = async (intent) => {
+    if (savingRef.current || !validate() || product.demo || !(price > 0)) return;
+    const details = { ...selection, package_name: selectedPackage?.name || "", location: selection.location.trim(), note: selection.note.trim() };
+    const item = { productId: Number(product.id), name: product.name, price, unit, cover: product.images[0], quantity: Number(quantity), selection: details };
+    savingRef.current = true; setSaving(true); setCartStatus(null);
     try {
-      setSubmittingReview(true);
-      const response = await apiClient.post("/reviews", {
-        productId: Number(product.id),
-        reviewer_name: username,
-        rating: Number(reviewForm.rating),
-        comment: reviewForm.comment.trim(),
-      }, { headers: buildAuthHeaders() });
-
-      if (response.data?.success) {
-        setReviewForm({ rating: 5, comment: "" });
-        await loadReviews();
-        notify.info("Cảm ơn bạn đã gửi đánh giá!");
+      if (intent === "buy") {
+        navigate("/dathang", { state: { cartItems: [{ ...item, id: `direct-${product.id}` }], bookingForm: { eventDate: details.event_date, location: details.location, note: details.note } } });
       } else {
-        notify.info(response.data?.message || "Gửi đánh giá thất bại!");
+        if (getAuthItem("token")) {
+          const response = await apiClient.post("/cart", { productId: item.productId, quantity: item.quantity, selection: details });
+          if (!response.data.success) throw new Error(response.data.message);
+        } else addGuestCartItem(item, item.quantity);
+        setCartStatus({ success: true, message: "Đã thêm sản phẩm cùng tùy chọn và thông tin tổ chức vào giỏ hàng." });
       }
-    } catch (error) {
-      console.error("Submit review error:", error);
-      notify.info("Có lỗi xảy ra khi gửi đánh giá!");
-    } finally {
-      setSubmittingReview(false);
-    }
+    } catch (err) { setCartStatus({ success: false, message: err.response?.data?.message || err.message || "Không thể thêm vào giỏ. Vui lòng thử lại." }); }
+    finally { savingRef.current = false; setSaving(false); }
   };
-
-  const openImagePreview = (imageName) => {
-    if (!imageName) return;
-    setMainImage(imageName);
-    setShowPreview(true);
+  const submitReview = async (rating, comment) => {
+    const response = await apiClient.post("/reviews", { productId: Number(product.id), rating, comment });
+    if (!response.data.success || !response.data.data) throw new Error("Review not saved");
+    const saved = response.data.data;
+    setReviews((previous) => [saved, ...previous.filter((review) => review.id !== saved.id)]);
   };
+  const fieldError = (name) => errors[name] && <small className="wc-field-error" id={`detail-${name}-error`}>{errors[name]}</small>;
+  const fieldProps = (name) => ({ name, value: selection[name], onChange: change, "aria-invalid": !!errors[name], "aria-describedby": errors[name] ? `detail-${name}-error` : undefined });
+  const imageError = (event) => { event.currentTarget.onerror = null; if (!event.currentTarget.src.endsWith(getImageUrl(null))) event.currentTarget.src = getImageUrl(null); };
 
-  if (loading) {
-    return <div className="loading">Đang tải dịch vụ...</div>;
-  }
-
-  if (!product) {
-    return (
-      <div className="product-detail">
-        <div className="not-found">
-          <h2>Không tìm thấy dịch vụ</h2>
-          <p>Dịch vụ này có thể đã được cập nhật hoặc tạm ẩn khỏi website.</p>
-          <button type="button" onClick={() => navigate("/sanpham")}>
-            Quay lại danh sách dịch vụ
-          </button>
-        </div>
+  if (loading) return <div className="wedding-catalog wc-state" role="status">Đang tải chi tiết sản phẩm…</div>;
+  if (error || !product) return <div className="wedding-catalog wc-state" role="alert"><h1>Chưa thể mở sản phẩm</h1><p>{error}</p><button className="wc-button" onClick={() => setRetry(retry + 1)}>Thử lại</button><Link to="/sanpham">Trở về sản phẩm</Link></div>;
+  return <div className="wedding-catalog wc-detail-page">
+    <div className="wc-detail-shell">
+      <nav className="wc-breadcrumb" aria-label="Đường dẫn"><Link to="/">Trang chủ</Link><span>/</span><Link to={product.demo ? "/sanpham?source=demo" : "/sanpham"}>Sản phẩm</Link><span>/</span><span>{product.name}</span></nav>
+      {product.demo && <p className="wc-notice">Mẫu, hình ảnh và giá minh họa. Biểu mẫu chạy ở chế độ demo và không gửi yêu cầu thật.</p>}
+      <div className="wc-detail-top">
+        <section className="wc-gallery" aria-label="Bộ ảnh sản phẩm">
+          <button className="wc-main-photo" onClick={() => setZoom(true)} aria-label="Phóng to ảnh sản phẩm"><img src={product.images[selectedImage]} alt={`${product.name} – ảnh ${selectedImage + 1}`} onError={imageError} /><span>Phóng to ↗</span></button>
+          <div className="wc-thumbnails">{product.images.map((image, index) => <button key={`${image}-${index}`} aria-label={`Xem ảnh ${index + 1}`} aria-pressed={selectedImage === index} onClick={() => setSelectedImage(index)}><img src={image} alt="" loading="lazy" onError={imageError} /></button>)}</div>
+          <p className="wc-gallery-note">Mỗi không gian, một dấu ấn ngày chung đôi.</p>
+        </section>
+        <section className="wc-detail-summary">
+          <Link className="wc-category" to={`/sanpham?${product.demo ? "source=demo&" : ""}category=${encodeURIComponent(product.category)}`}>{product.category}</Link>
+          <h1>{product.name}</h1>
+          <div className="wc-detail-price" aria-live="polite">{packages.length && !selectedPackage ? "Chọn gói để xem giá" : formatPrice({ price, unit })}</div>
+          {product.demo && <p className="wc-price-note">Giá minh họa, không phải báo giá chính thức.</p>}
+          <p className="wc-detail-intro">{product.shortDescription}</p>
+          <div ref={fieldsRef} className="wc-detail-options">
+            {packages.length > 0 && <label className="wc-field">Loại gói *<select {...fieldProps("package_id")}><option value="">Chọn loại gói</option>{packages.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>{fieldError("package_id")}</label>}
+            <div className="wc-detail-field-grid">
+              {product.colors.length > 0 && <label className="wc-field">Tông màu *<select {...fieldProps("color")}>{product.colors.map((item) => <option key={item}>{item}</option>)}</select>{fieldError("color")}</label>}
+              <label className="wc-field">Số lượng ({unit}) *<input type="number" name="quantity" min={1} max={999} step={1} value={quantity} onChange={(event) => { setQuantity(event.target.value); setErrors((prev) => ({ ...prev, quantity: "" })); }} aria-invalid={!!errors.quantity} aria-describedby={errors.quantity ? "detail-quantity-error" : undefined} />{fieldError("quantity")}</label>
+              <label className="wc-field">Ngày tổ chức *<input type="date" min={minBookingDate()} {...fieldProps("event_date")} />{fieldError("event_date")}</label>
+            </div>
+            <label className="wc-field">Địa điểm tổ chức *<input type="text" maxLength={500} placeholder="Địa chỉ tổ chức lễ hoặc tiệc cưới" {...fieldProps("location")} />{fieldError("location")}</label>
+            <label className="wc-field">Ghi chú và mong muốn riêng<textarea rows={3} maxLength={2000} placeholder="Quy mô, phong cách và các yêu cầu của bạn…" {...fieldProps("note")} /></label>
+          </div>
+          {price > 0 && <p className="wc-detail-total">Tạm tính <strong>{(price * (Number.isSafeInteger(Number(quantity)) && Number(quantity) > 0 && Number(quantity) <= 999 ? Number(quantity) : 0)).toLocaleString("vi-VN")} ₫</strong></p>}
+          <div className="wc-detail-actions">
+            {!product.demo && (price > 0 || (packages.length > 0 && !selectedPackage)) ? <><button className="wc-button" disabled={saving} onClick={() => purchase("cart")}>{saving ? "Đang xử lý…" : "Thêm vào giỏ hàng"}</button><button className="wc-button" disabled={saving} onClick={() => purchase("buy")}>Đặt ngay</button></> : <button className="wc-button" onClick={() => setQuote("quote")}>Yêu cầu báo giá</button>}
+            <button className="wc-button wc-button-outline" onClick={() => setQuote("consultation")}>Liên hệ tư vấn</button>
+          </div>
+          {cartStatus && <p className={`wc-cart-feedback ${cartStatus.success ? "" : "is-error"}`} role={cartStatus.success ? "status" : "alert"}>{cartStatus.message} {cartStatus.success && <Link to="/giohang">Xem giỏ hàng →</Link>}</p>}
+          <p className="wc-calendar-note">Lịch phục vụ sẽ được kiểm tra và xác nhận sau khi tiếp nhận yêu cầu.</p>
+          <div className="wc-detail-assurance"><span>Thiết kế theo không gian</span><span>Tư vấn trước khi chốt lịch</span></div>
+        </section>
       </div>
-    );
-  }
-
-  return (
-    <div className="product-detail">
-      <div className="detail-container">
-        <div className="image-section">
-          <div className="main-image-wrapper">
-            <img
-              src={getImageUrl(mainImage || getProductImage(product))}
-              alt={product.name}
-              className="main-image"
-              onClick={() => setShowPreview(true)}
-              onError={(event) => {
-                event.currentTarget.src = fallbackImage;
-              }}
-            />
-
-            <button
-              type="button"
-              className={`favorite ${favorite ? "active" : ""}`}
-              onClick={() => setFavorite((prev) => !prev)}
-              aria-label="Yêu thích dịch vụ"
-            >
-              ❤
-            </button>
-          </div>
-
-          <div className="thumbnail-list">
-            {productImages.map((imageName, index) => (
-              <img
-                key={`${imageName}-${index}`}
-                src={getImageUrl(imageName)}
-                alt={`${product.name} ${index + 1}`}
-                className={`thumbnail ${mainImage === imageName ? "active" : ""}`}
-                onClick={() => openImagePreview(imageName)}
-                onError={(event) => {
-                  event.currentTarget.src = fallbackImage;
-                }}
-              />
-            ))}
-          </div>
-        </div>
-
-        <div className="info-section">
-          <span className="detail-eyebrow">Ngọc Thiện Wedding</span>
-          <h2>{product.name}</h2>
-
-          <div className="rating-summary">
-            <div className="rating-stars">{renderStarIcons(Math.round(averageRating))}</div>
-            <div className="rating-summary-text">
-              <strong>{averageRating > 0 ? averageRating.toFixed(1) : "5.0"}</strong>
-              <span>{reviewCount} đánh giá từ khách hàng</span>
-            </div>
-          </div>
-
-          <div className="price">{formatCurrency(product.price)}</div>
-
-          <div className="service-meta">
-            <div>
-              <span>Tư vấn</span>
-              <strong>Miễn phí theo nhu cầu tiệc</strong>
-            </div>
-            <div>
-              <span>Đặt lịch</span>
-              <strong>Cọc giữ ngày, thanh toán sau chương trình</strong>
-            </div>
-            <div>
-              <span>Khu vực</span>
-              <strong>Quảng Ngãi và khu vực lân cận</strong>
-            </div>
-          </div>
-
-          <div className="quantity-box">
-            <span>Số lượng / gói dịch vụ</span>
-            <div className="quantity-controls">
-              <button type="button" onClick={decreaseQty} aria-label="Giảm số lượng">
-                -
-              </button>
-              <input
-                value={quantity}
-                onChange={(event) => {
-                  const nextValue = Math.max(1, Number(event.target.value || 1));
-                  setQuantity(
-                    hasStockLimit ? Math.min(nextValue, Number(product.stock)) : nextValue
-                  );
-                }}
-              />
-              <button type="button" onClick={increaseQty} aria-label="Tăng số lượng">
-                +
-              </button>
-            </div>
-            <small>
-              {hasStockLimit
-                ? `Còn ${Number(product.stock).toLocaleString("vi-VN")} gói có thể đặt`
-                : "Dịch vụ nhận đặt theo lịch cưới và quy mô thực tế"}
-            </small>
-          </div>
-
-          <div className="actions">
-            <button className="add-cart" type="button" onClick={addToCart}>
-              Thêm vào giỏ
-            </button>
-            <button className="buy-now" type="button" onClick={buyNow}>
-              Đặt dịch vụ ngay
-            </button>
-          </div>
-
-          <button className="consult-detail-btn" type="button" onClick={() => navigate("/")}>
-            Liên hệ tư vấn chi tiết
-          </button>
-        </div>
-      </div>
-
-      <div className="description-section">
-        <h3>Mô tả dịch vụ</h3>
-        <div className="description-content">
-          {descriptionSections.length ? (
-            descriptionSections.map((section, index) => {
-              const rows = getKnownSectionRows(section.title, section.content);
-              const isDistanceTable = section.title
-                .toLowerCase()
-                .includes("khoảng cách");
-              const isListSection = [
-                "Dịch vụ bao gồm",
-                "Nâng cấp thêm",
-                "Điểm nổi bật",
-                "Phù hợp cho",
-                "Ưu đãi",
-              ].includes(section.title);
-              const items = splitDescriptionItems(section.content);
-
-              return (
-                <section className="description-block" key={`${section.title}-${index}`}>
-                  {section.title && <h4>{section.title}</h4>}
-
-                  {rows.length > 0 ? (
-                    <div className="description-table-wrap">
-                      <table className="description-table">
-                        <thead>
-                          <tr>
-                            {isDistanceTable ? (
-                              <>
-                                <th>Gói dịch vụ</th>
-                                <th>Khoảng cách</th>
-                                <th>Giá</th>
-                              </>
-                            ) : (
-                              <>
-                                <th>Loại xe</th>
-                                <th>Giá từ</th>
-                              </>
-                            )}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {rows.map((row) => (
-                            <tr key={row.join("-")}>
-                              {row.map((cell) => (
-                                <td key={cell}>{cell}</td>
-                              ))}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : isListSection && items.length > 1 ? (
-                    <ul className="description-list">
-                      {items.map((item) => (
-                        <li key={item}>{item}</li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p>{section.content}</p>
-                  )}
-                </section>
-              );
-            })
-          ) : (
-            <p>Dịch vụ đang được cập nhật mô tả chi tiết.</p>
-          )}
-        </div>
-
-        <h3>Hình ảnh dịch vụ</h3>
-        <div className="extra-images">
-          {productImages.map((imageName, index) => (
-            <img
-              key={`${imageName}-extra-${index}`}
-              src={getImageUrl(imageName)}
-              alt={`${product.name} ${index + 1}`}
-              onClick={() => openImagePreview(imageName)}
-              onError={(event) => {
-                event.currentTarget.src = fallbackImage;
-              }}
-            />
-          ))}
-        </div>
-
-        <div className="reviews-section">
-          <div className="reviews-header">
-            <div>
-              <h3>Khách hàng đánh giá</h3>
-              <p>
-                Những chia sẻ từ khách hàng đã sử dụng dịch vụ của Ngọc Thiện Wedding.
-              </p>
-            </div>
-            <div className="reviews-overview">
-              <strong>{averageRating > 0 ? averageRating.toFixed(1) : "5.0"}</strong>
-              <span>{reviewCount} lượt đánh giá</span>
-            </div>
-          </div>
-
-          <div className={`review-form ${reviewEligibility.canReview ? "" : "locked"}`}>
-            <div className="review-eligibility">
-              {reviewEligibility.loading ? "Đang kiểm tra điều kiện đánh giá..." : reviewEligibility.message}
-            </div>
-            <div className="review-form__stars">
-              <span>Chọn số sao của bạn</span>
-              <div className="interactive-stars">
-                {renderStarIcons(reviewForm.rating, reviewEligibility.canReview, (value) =>
-                  setReviewForm((prev) => ({ ...prev, rating: value }))
-                )}
-              </div>
-            </div>
-
-            <textarea
-              placeholder="Hãy chia sẻ cảm nhận của bạn về dịch vụ này..."
-              value={reviewForm.comment}
-              onChange={(event) =>
-                setReviewForm((prev) => ({ ...prev, comment: event.target.value }))
-              }
-              rows={4}
-              disabled={!reviewEligibility.canReview}
-            />
-
-            <button
-              className="submit-review"
-              type="button"
-              onClick={submitReview}
-              disabled={submittingReview || !reviewEligibility.canReview}
-            >
-              {submittingReview ? "Đang gửi..." : "Gửi đánh giá"}
-            </button>
-          </div>
-
-          {reviewLoading ? (
-            <div className="reviews-empty">Đang tải đánh giá...</div>
-          ) : reviewError ? (
-            <div className="reviews-empty">{reviewError}</div>
-          ) : reviews.length === 0 ? (
-            <div className="reviews-empty">
-              Chưa có đánh giá nào. Hãy là người đầu tiên chia sẻ cảm nhận của bạn.
-            </div>
-          ) : (
-            <div className="review-list">
-              {reviews.map((review) => (
-                <div className="review-card" key={review.id}>
-                  <div className="review-card__top">
-                    <div>
-                      <strong>{review.reviewer_name}</strong>
-                      <div className="review-card__stars">
-                        {renderStarIcons(Number(review.rating || 0))}
-                      </div>
-                    </div>
-                    <span>{new Date(review.created_at).toLocaleDateString("vi-VN")}</span>
-                  </div>
-                  <p>{review.comment}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {showPreview && (
-        <div className="image-modal" onClick={() => setShowPreview(false)}>
-          <img
-            src={getImageUrl(mainImage || getProductImage(product))}
-            alt="Preview"
-            className="modal-image"
-            onError={(event) => {
-              event.currentTarget.src = fallbackImage;
-            }}
-          />
-        </div>
-      )}
+      <div className="wc-detail-information"><ProductDescription content={product.descriptionContent || product.description || product.shortDescription} /><div className="wc-detail-info-grid"><section><h3>Hạng mục bao gồm</h3><ul>{product.included.map((item) => <li key={item}>{item}</li>)}</ul></section><section><h3>Chi phí phát sinh</h3><ul>{product.excluded.map((item) => <li key={item}>{item}</li>)}</ul></section></div><section className="wc-terms"><h3>Chính sách thuê và lắp đặt</h3><p>{product.terms}</p></section></div>
+      <ProductReviews key={product.id} product={product} reviews={reviews} onSubmit={submitReview} />
+      {related.length > 0 && <section className="wc-related"><div><h2>Sản phẩm liên quan</h2><Link className="wc-text-link" to={product.demo ? "/sanpham?source=demo" : "/sanpham"}>Khám phá thêm</Link></div><div className="wc-grid">{related.map((item) => <WeddingCard key={item.id} product={item} />)}</div></section>}
     </div>
-  );
+    {quote && <QuoteDialog key={`${id}-${quote}`} product={product} selection={{ ...selection, quantity, package_name: selectedPackage?.name || "" }} intent={quote} onClose={() => setQuote(null)} />}
+    {zoom && <CatalogDialog title={product.name} onClose={() => setZoom(false)} wide><img className="wc-zoom-image" src={product.images[selectedImage]} onError={imageError} alt={`${product.name} – ảnh phóng to`} /><div className="wc-zoom-actions"><button className="wc-button wc-button-outline" disabled={selectedImage === 0} onClick={() => setSelectedImage(selectedImage - 1)}>Ảnh trước</button><span>{selectedImage + 1} / {product.images.length}</span><button className="wc-button wc-button-outline" disabled={selectedImage === product.images.length - 1} onClick={() => setSelectedImage(selectedImage + 1)}>Ảnh sau</button></div></CatalogDialog>}
+  </div>;
 };
-
 export default ProductDetail;

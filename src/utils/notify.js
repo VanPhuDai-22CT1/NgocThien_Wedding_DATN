@@ -38,8 +38,8 @@ export const notify = {
             <button
               type="button"
               onClick={() => {
-                toast.dismiss(id);
                 finish(true);
+                toast.dismiss(id);
               }}
             >
               {confirmText}
@@ -47,8 +47,8 @@ export const notify = {
             <button
               type="button"
               onClick={() => {
-                toast.dismiss(id);
                 finish(false);
+                toast.dismiss(id);
               }}
             >
               {cancelText}

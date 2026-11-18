@@ -1,201 +1,49 @@
-import React, { useEffect, useState } from "react";
-import axios from "axios";
+import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { FiArrowRight } from "react-icons/fi";
 import { getAuthItem } from "utils/authStorage";
 import { getGuestCart } from "utils/guestCart";
-import { apiClient, buildAuthHeaders } from "utils/apiClient";
-import "./style.scss";
-import { notify } from "utils/notify";
+import { apiClient } from "utils/apiClient";
+import { BackLink, CheckoutLayout, EmptyState, OrderSummary, minBookingDate, normalizeCart, restoreCheckout, saveCheckout, validCart, validateBooking } from "component/Checkout/shared";
 
-const DatDichVu = () => {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const userId = getAuthItem("user_id");
-
-  const [cart, setCart] = useState([]);
-  const [submitting, setSubmitting] = useState(false);
-  const [dateStatus, setDateStatus] = useState(null);
-  const [dateRemaining, setDateRemaining] = useState(2);
-  const [formData, setFormData] = useState({
-    name: "",
-    email: "",
-    phone: "",
-    eventDate: "",
-    location: "",
-    note: "",
-  });
-
+const emptyForm = { name: "", phone: "", email: "", eventDate: "", location: "", note: "" };
+export default function BookingPage() {
+  const location = useLocation(); const navigate = useNavigate(); const userId = getAuthItem("user_id");
+  const initial = useRef(restoreCheckout(location.state));
+  const [items, setItems] = useState(() => normalizeCart(initial.current?.cartItems));
+  const [form, setForm] = useState(() => ({ ...emptyForm, ...initial.current?.bookingForm }));
+  const [errors, setErrors] = useState({}); const [loading, setLoading] = useState(!initial.current?.cartItems); const [error, setError] = useState("");
+  const [reload, setReload] = useState(0); const [storageError, setStorageError] = useState(false); const formRef = useRef(null);
   useEffect(() => {
-    if (userId) {
-      apiClient
-        .get("/cart", {
-          params: { userid: userId },
-        })
-        .then((res) => {
-          if (res.data?.success) {
-            setCart(res.data.data || []);
-          }
-        })
-        .catch(() => {});
-
-      apiClient
-        .get("/auth/me", { headers: buildAuthHeaders() })
-        .then((res) => {
-          if (res.data?.success) {
-            const user = res.data.data || {};
-            setFormData((prev) => ({
-              ...prev,
-              name: user.username || "",
-              email: user.email || "",
-              phone: user.phone || "",
-              location: user.address || "",
-            }));
-          }
-        })
-        .catch(() => {});
-
-      return;
-    }
-
-    setCart(getGuestCart());
-  }, [userId]);
-
-  useEffect(() => {
-    if (location.state?.cartItems && Array.isArray(location.state.cartItems)) {
-      setCart(location.state.cartItems);
-    }
-
-    if (location.state?.bookingForm) {
-      setFormData((prev) => ({
-        ...prev,
-        ...location.state.bookingForm,
-      }));
-    }
-  }, [location.state]);
-
-  const formatDateInput = (date) => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
-  };
-
-  const minEventDate = (() => {
-    const minDate = new Date();
-    minDate.setDate(minDate.getDate() + 2);
-    return formatDateInput(minDate);
-  })();
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
-    const checkDate = async (date) => {
-      if (!date) { setDateStatus(null); return; }
-      setDateStatus("checking");
-      try {
-        const res = await apiClient.get("/consultations/booked-dates");
-        if (res.data?.success) {
-          const bookedDates = Array.isArray(res.data.data) ? res.data.data : [];
-          const normalizedDate = String(date).slice(0, 10);
-          const usedCount = bookedDates.filter(
-            (item) => String(item).slice(0, 10) === normalizedDate
-          ).length;
-          const remaining = Math.max(0, 2 - usedCount);
-          setDateRemaining(remaining);
-          setDateStatus(remaining > 0 ? "available" : "full");
-        } else {
-          setDateStatus(null);
-        }
-      } catch {
-        setDateStatus(null);
+    let stopped = false; const controller = new AbortController();
+    const load = async () => {
+      if (!initial.current?.cartItems) {
+        setLoading(true); setError("");
+        try {
+          let cart = getGuestCart();
+          if (userId) { const response = await apiClient.get("/cart", { signal: controller.signal }); if (!response.data.success) throw new Error(); cart = response.data.data; }
+          if (!stopped) { const next = normalizeCart(cart); setItems(next); const details = next[0]?.selection || {}; setForm((previous) => ({ ...previous, eventDate: previous.eventDate || details.event_date || "", location: previous.location || details.location || "", note: previous.note || details.note || "" })); }
+        } catch { if (!stopped) setError("Chưa tải được dịch vụ đã chọn. Vui lòng thử lại."); }
+        finally { if (!stopped) setLoading(false); }
+      }
+      if (userId) {
+        try { const response = await apiClient.get("/auth/me", { signal: controller.signal }); if (!stopped && response.data.success) { const user = response.data.data || {}; setForm((previous) => ({ ...previous, name: previous.name || user.full_name || user.username || "", email: previous.email || user.email || "", phone: previous.phone || user.phone || "" })); } } catch { /* User can enter contact details directly. */ }
       }
     };
-
-    const handleContinue = () => {
-    if (!formData.name || !formData.phone || !formData.eventDate) {
-      notify.info("Vui lòng nhập đầy đủ Họ tên, SĐT và Ngày cưới dự kiến");
-      return;
-    }
-
-    if (formData.eventDate < minEventDate) {
-      notify.info("Ngày cưới phải cách ngày hiện tại ít nhất 2 ngày.");
-      return;
-    }
-
-      if (dateStatus === "full") {
-        notify.info("Ngày này đã đủ 2 tiệc cưới, vui lòng chọn ngày khác.");
-        return;
-      }
-
-      if (cart.length === 0) {
-      notify.info("Giỏ dịch vụ đang trống");
-      return;
-    }
-
-    setSubmitting(true);
-    navigate("/thanhtoan", {
-      state: {
-        bookingForm: formData,
-        cartItems: cart,
-      },
-    });
+    load(); return () => { stopped = true; controller.abort(); };
+  }, [userId, reload]);
+  useEffect(() => { if (items.length) setStorageError(!saveCheckout({ cartItems: items, bookingForm: form })); }, [form, items]);
+  const change = (event) => { const { name, value } = event.target; setForm((previous) => ({ ...previous, [name]: value })); setErrors((previous) => ({ ...previous, [name]: "" })); };
+  const submit = (event) => {
+    event.preventDefault(); const nextErrors = validateBooking(form); setErrors(nextErrors);
+    if (Object.keys(nextErrors).length) { formRef.current?.querySelector(`[name="${Object.keys(nextErrors)[0]}"]`)?.focus(); return; }
+    if (items.some((item) => item.selection?.event_date && item.selection.event_date < minBookingDate())) { setError("Ngày sử dụng của dịch vụ trong giỏ phải cách hôm nay ít nhất 3 ngày. Vui lòng quay lại giỏ hàng, mở dịch vụ và chọn lại ngày."); return; }
+    if (!validCart(items)) { setError("Có dịch vụ cần cập nhật giá hoặc số lượng. Vui lòng kiểm tra lại giỏ hàng."); return; }
+    const data = { cartItems: items, bookingForm: Object.fromEntries(Object.entries(form).map(([key, value]) => [key, String(value).trim()])) };
+    saveCheckout(data); navigate("/thanhtoan", { state: data });
   };
-
-  const total = cart.reduce((sum, item) => sum + Number(item.price) * Number(item.quantity), 0);
-
-  return (
-    <div className="order-wrapper">
-      <div className="order-container">
-        <div className="order-card">
-          <h2>📦 Thông tin đặt dịch vụ</h2>
-
-          {cart.length === 0 ? (
-            <div className="order-list">
-              <p>Giỏ dịch vụ đang trống.</p>
-              <button className="btn-confirm" onClick={() => navigate("/sanpham")}>Tiếp tục chọn dịch vụ</button>
-            </div>
-          ) : (
-            <>
-              <div className="order-list">
-                {cart.map((item) => (
-                  <div className="order-item" key={item.id}>
-                    <div className="item-info">
-                      <span className="name">{item.name}</span>
-                      <span className="qty">Số lượng: {item.quantity}</span>
-                    </div>
-                    <div className="item-price">{(item.price * item.quantity).toLocaleString()} VNĐ</div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="order-total">
-                <span>Tổng tiền tạm tính</span>
-                <strong>{total.toLocaleString()} VNĐ</strong>
-              </div>
-
-              <div className="order-form">
-                <input name="name" value={formData.name} onChange={handleChange} placeholder="Họ và tên *" />
-                <input name="email" type="email" value={formData.email} onChange={handleChange} placeholder="Email" />
-                <input name="phone" value={formData.phone} onChange={handleChange} placeholder="Số điện thoại *" />
-                  <input name="eventDate" type="date" min={minEventDate} value={formData.eventDate} onChange={(e) => { handleChange(e); checkDate(e.target.value); }} />
-                  {dateStatus === "checking" && <p className="date-hint checking">⏳ Đang kiểm tra ngày...</p>}
-                  {dateStatus === "available" && <p className="date-hint available">✅ Ngày này còn nhận ({dateRemaining} suất)</p>}
-                  {dateStatus === "full" && <p className="date-hint full">🚫 Ngày {formData.eventDate} đã đủ 2 tiệc cưới, vui lòng chọn ngày khác</p>}
-                <input name="location" value={formData.location} onChange={handleChange} placeholder="Địa điểm tổ chức" />
-                <textarea name="note" rows="3" value={formData.note} onChange={handleChange} placeholder="Ghi chú yêu cầu" />
-              </div>
-
-              <button className="btn-confirm" onClick={handleContinue} disabled={submitting || dateStatus === "full"}>
-                Xác nhận thông tin & chọn thanh toán
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-export default DatDichVu;
+  const field = (name, label, type = "text", attributes = {}) => <div className={`cx-field${name === "location" || name === "note" ? " cx-field--wide" : ""}`} ><label htmlFor={`cx-${name}`}>{label}{["name", "phone", "eventDate", "location"].includes(name) && <b aria-hidden="true"> *</b>}</label>{name === "note" ? <textarea id={`cx-${name}`} name={name} rows={3} value={form[name]} onChange={change} maxLength={2000} /> : <input id={`cx-${name}`} name={name} type={type} value={form[name]} onChange={change} aria-invalid={!!errors[name]} aria-describedby={errors[name] ? `cx-error-${name}` : name === "eventDate" ? "cx-date-help" : undefined} {...attributes} />}{errors[name] && <small className="cx-field-error" id={`cx-error-${name}`}>{errors[name]}</small>}{name === "eventDate" && <small id="cx-date-help">Ngày tổ chức cách hôm nay ít nhất 3 ngày.</small>}</div>;
+  return <CheckoutLayout step={2} title="Thông tin tổ chức" description="Điền thông tin để Ngọc Thiện chuẩn bị phương án phù hợp cho bạn.">
+    {loading ? <div className="cx-panel cx-loading" role="status">Đang tải thông tin…</div> : error && !items.length ? <EmptyState title="Chưa tải được thông tin" message={error} action={<button className="cx-button" type="button" onClick={() => setReload((value) => value + 1)}>Thử lại</button>} /> : !items.length ? <EmptyState /> : <div className="cx-grid"><form className="cx-panel cx-booking" onSubmit={submit} noValidate ref={formRef}><div className="cx-section-heading"><h2>Thông tin liên hệ & ngày tổ chức</h2><p>Các trường có dấu * là bắt buộc.</p></div>{error && <p className="cx-alert" role="alert">{error}</p>}{storageError && <p className="cx-alert">Trình duyệt chưa lưu được bản nháp. Hãy giữ trang này mở trong khi nhập.</p>}<div className="cx-fields">{field("name", "Họ và tên", "text", { autoComplete: "name", maxLength: 255 })}{field("phone", "Số điện thoại", "tel", { autoComplete: "tel", maxLength: 20 })}{field("email", "Email", "email", { autoComplete: "email", maxLength: 100 })}{field("eventDate", "Ngày tổ chức", "date", { min: minBookingDate() })}{field("location", "Địa điểm tổ chức", "text", { autoComplete: "street-address", maxLength: 500, placeholder: "Số nhà, đường, phường/xã, tỉnh/thành phố" })}{field("note", "Ghi chú và mong muốn riêng")}</div><div className="cx-form-footer"><BackLink /><button className="cx-button" type="submit">Tiếp tục thanh toán <FiArrowRight aria-hidden="true" /></button></div></form><OrderSummary items={items}><p className="cx-inline-note">Lịch phục vụ được kiểm tra khi gửi yêu cầu và cần được nhân viên xác nhận.</p></OrderSummary></div>}
+  </CheckoutLayout>;
+}

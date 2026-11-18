@@ -1,311 +1,117 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
-import { FaEye } from "react-icons/fa";
-import { FiShoppingCart } from "react-icons/fi";
-import { getAuthItem } from "utils/authStorage";
-import { addGuestCartItem } from "utils/guestCart";
-import { apiClient, buildAuthHeaders } from "utils/apiClient";
-import { getImageUrl, getProductImage } from "../../../utils/image";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import { apiClient } from "utils/apiClient";
+import { CATEGORIES, COLORS, SAMPLE_PRODUCTS, normalizeProduct, normalizeText } from "utils/weddingCatalog";
+import { WeddingCard } from "component/WeddingCatalog";
+import HeroSlideshow from "component/WeddingCatalog/HeroSlideshow";
+import CatalogSelect from "component/WeddingCatalog/CatalogSelect";
 import "./style.scss";
-import { notify } from "utils/notify";
 
-const normalizeText = (value) =>
-  String(value || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/đ/g, "d")
-    .toLowerCase()
-    .trim();
-
-const includesOneOf = (text, keywords) =>
-  keywords.some((keyword) => text.includes(keyword));
-
-const categoryMatchers = {
-  "thuc don": {
-    ids: [3],
-    keywords: ["thuc don", "ban tiec", "menu", "nau tiec", "nau an", "mon an"],
-  },
-  "thuc don tiec cuoi": {
-    ids: [3],
-    keywords: ["thuc don", "ban tiec", "menu", "nau tiec", "nau an", "mon an"],
-  },
-  "trang tri gia tien": {
-    ids: [1],
-    keywords: ["trang tri", "gia tien", "san khau", "backdrop", "cong hoa"],
-  },
-  "trang tri tiec cuoi": {
-    ids: [5],
-    keywords: ["trang tri", "tiec cuoi", "san khau", "backdrop", "cong hoa", "ban gallery"],
-  },
-  "chup anh cuoi": {
-    ids: [2],
-    keywords: ["chup anh", "anh cuoi", "album", "studio", "phong su anh"],
-  },
-  "quay phim cuoi": {
-    ids: [6],
-    keywords: ["quay phim", "video", "phong su cuoi", "clip cuoi", "highlight"],
-  },
-  "mam qua cuoi hoi": {
-    ids: [7],
-    keywords: ["mam qua", "trap", "rong phung", "le vat", "an hoi"],
-  },
-  "mam qua ket rong phuong": {
-    ids: [7],
-    keywords: ["mam qua", "trap", "rong phung", "le vat", "an hoi"],
-  },
-  "cho thue khung rap": {
-    ids: [9],
-    keywords: ["khung rap", "rap cuoi", "trai cuoi", "nha rap", "ban ghe"],
-  },
-  "dich vu be trap": {
-    ids: [8],
-    keywords: ["be trap", "doi be trap", "bung qua", "le tan"],
-  },
-  "am thanh anh sang": {
-    ids: [10],
-    keywords: ["am thanh", "anh sang", "loa", "micro", "den", "led"],
-  },
-  "trang phuc cuoi": {
-    ids: [11],
-    keywords: ["trang phuc", "ao cuoi", "vest", "ao dai", "makeup", "trang diem"],
-  },
-  "xe hoa": {
-    ids: [12],
-    keywords: ["xe hoa", "xe cuoi", "xe ruoc dau"],
-  },
-  "thiep cuoi & qua cuoi": {
-    ids: [13],
-    keywords: ["thiep cuoi", "qua cuoi", "qua tang", "wedding favor"],
-  },
-  "tron goi ngay cuoi": {
-    ids: [14],
-    keywords: ["tron goi", "ngay cuoi", "cuoi hoi", "combo", "goi cuoi"],
-  },
-};
-
-const matchesCategoryByName = (categoryName, product) => {
-  const normalizedCategory = normalizeText(categoryName);
-  const matcher = categoryMatchers[normalizedCategory];
-  const productCategoryId = Number(product.category_id || 0);
-  const text = normalizeText(
-    `${product.name || ""} ${product.description || ""} ${product.service_details || ""}`
-  );
-
-  if (!matcher) {
-    return text.includes(normalizedCategory);
-  }
-
-  if (matcher.ids.includes(productCategoryId)) return true;
-  return includesOneOf(text, matcher.keywords);
-};
-
-const ProductCard = ({ product, onAddToCart }) => {
-  const averageRating = Number(product.average_rating || 0);
-  const reviewCount = Number(product.review_count || 0);
-  const roundedStars = Math.max(0, Math.min(5, Math.round(averageRating)));
-  const starsText = "★".repeat(roundedStars) + "☆".repeat(5 - roundedStars);
-
-  return (
-    <div className="product-card">
-      <div className="product-image">
-        <img
-          src={getImageUrl(getProductImage(product))}
-          alt={product.name}
-          onError={(event) => {
-            event.currentTarget.src = "https://via.placeholder.com/400x400?text=No+Image";
-          }}
-        />
-
-        <div className="image-actions">
-          <Link to={`/chitietsanpham/${product.id}`} className="circle-btn" aria-label="Xem chi tiết">
-            <FaEye />
-          </Link>
-
-          <button
-            type="button"
-            className="circle-btn"
-            onClick={(event) => {
-              event.stopPropagation();
-              onAddToCart(product.id, 1);
-            }}
-            aria-label="Thêm vào giỏ"
-          >
-            <FiShoppingCart />
-          </button>
-        </div>
-      </div>
-
-      <div className="product-info">
-        <h3 className="product-name">{product.name}</h3>
-        <p className="product-price">
-          {Number(product.price || 0).toLocaleString("vi-VN")} VND
-        </p>
-
-        <div className="product-rating-real">
-          {reviewCount > 0 ? (
-            <>
-              <span className="stars" aria-label={`${averageRating.toFixed(1)} trên 5 sao`}>
-                {starsText}
-              </span>
-              <span className="meta">
-                <span className="score">{averageRating.toFixed(1)}/5</span>
-                <span className="dot">•</span>
-                <span className="count">{reviewCount} đánh giá</span>
-              </span>
-            </>
-          ) : (
-            <span className="no-review">Chưa có đánh giá</span>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
-
+const PAGE_SIZE = 9;
 const ProductList = () => {
-  const location = useLocation();
-  const queryParams = new URLSearchParams(location.search);
-  const searchKeyword = queryParams.get("search") || "";
-  const categoryParam = queryParams.get("category") || "";
-
+  const [params, setParams] = useSearchParams();
+  const contentRef = useRef(null);
+  useEffect(() => {
+    const content = contentRef.current;
+    const header = document.querySelector(".header__main");
+    if (!content || !header) return;
+    const measure = () => content.style.setProperty("--catalog-header-height", `${header.getBoundingClientRect().height}px`);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(header);
+    return () => observer.disconnect();
+  }, []);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchProducts = async () => {
-      try {
-        setLoading(true);
-        // Use the same complete catalog endpoint as the home page and admin.
-        // /products applies pagination (20 items by default), which can hide
-        // older products when a category is selected.
-        const response = await apiClient.get("/legacy", {
-          params: { action: "getProducts" },
-        });
-        setProducts(
-          response.data?.success && Array.isArray(response.data.data)
-            ? response.data.data
-            : []
-        );
-      } catch (error) {
-        console.error("Load products error:", error);
-        setProducts([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchProducts();
-  }, []);
-
-  const addToCart = async (productId, quantity) => {
-    const userId = getAuthItem("user_id");
-    const selectedProduct = products.find(
-      (item) => Number(item.id) === Number(productId)
-    );
-
-    if (!userId) {
-      addGuestCartItem(
-        {
-          productId: Number(productId),
-          name: selectedProduct?.name,
-          price: Number(selectedProduct?.price || 0),
-          cover: getProductImage(selectedProduct),
-        },
-        Number(quantity || 1)
-      );
-      notify.info("Đã thêm vào giỏ hàng");
-      return;
-    }
-
-    try {
-      const response = await apiClient.post(
-        "/cart",
-        {
-          userid: Number(userId),
-          productId,
-          quantity,
-        },
-        { headers: buildAuthHeaders() }
-      );
-
-      if (response.data?.success) {
-        notify.info("Đã thêm vào giỏ hàng");
-      } else {
-        notify.info(response.data?.message || "Thêm dịch vụ thất bại");
-      }
-    } catch (error) {
-      console.error("Add to cart error:", error);
-      notify.info("Có lỗi xảy ra khi thêm dịch vụ vào giỏ hàng");
-    }
+  const [error, setError] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const demo = params.get("source") === "demo";
+  const search = params.get("search") || "";
+  const category = params.get("category") || "";
+  const color = params.get("color") || "";
+  const price = params.get("price") || "";
+  const sort = params.get("sort") || "newest";
+  const change = (name, value) => {
+    const next = new URLSearchParams(params);
+    if (value) next.set(name, value); else next.delete(name);
+    if (name !== "page") next.delete("page");
+    setParams(next, { replace: name === "search" });
   };
-
-  const filteredProducts = useMemo(
-    () =>
-      products.filter((product) => {
-        const searchableText = normalizeText(
-          `${product.name || ""} ${product.description || ""} ${product.service_details || ""}`
-        );
-        const matchSearch = searchKeyword
-          ? searchableText.includes(normalizeText(searchKeyword))
-          : true;
-
-        const matchCategory = (() => {
-          if (!categoryParam) return true;
-
-          if (/^\d+$/.test(categoryParam)) {
-            return String(product.category_id) === String(categoryParam);
-          }
-
-          const normalizedCategory = normalizeText(categoryParam);
-          const productCategoryCandidates = [
-            product.category_name,
-            product.category,
-            product.category_title,
-          ]
-            .map(normalizeText)
-            .filter(Boolean);
-
-          if (
-            productCategoryCandidates.some((name) =>
-              name.includes(normalizedCategory)
-            )
-          ) {
-            return true;
-          }
-
-          return matchesCategoryByName(categoryParam, product);
-        })();
-
-        return matchSearch && matchCategory;
-      }),
-    [categoryParam, products, searchKeyword]
-  );
-
-  if (loading) {
-    return <p className="loading">Đang tải dịch vụ...</p>;
-  }
-
-  return (
-    <section className="product-list">
-      <h2 className="product-title">
-        {searchKeyword
-          ? `Kết quả tìm kiếm: "${searchKeyword}"`
-          : categoryParam
-          ? `Danh mục: ${categoryParam}`
-          : "Dịch vụ nổi bật"}
-      </h2>
-
-      <div className="product-grid">
-        {filteredProducts.length > 0 ? (
-          filteredProducts.map((item) => (
-            <ProductCard key={item.id} product={item} onAddToCart={addToCart} />
-          ))
-        ) : (
-          <p>Không tìm thấy dịch vụ phù hợp</p>
-        )}
+  const fetchProducts = useCallback(async (signal) => {
+    setLoading(true); setError("");
+    try {
+      const response = await apiClient.get("/legacy", { params: { action: "getProducts" }, signal });
+      if (!response.data.success || !Array.isArray(response.data.data)) throw new Error("Invalid catalog");
+      setProducts(response.data.data.map(normalizeProduct));
+    } catch (err) {
+      if (!signal?.aborted) setError("Không thể tải dịch vụ. Vui lòng kiểm tra kết nối và thử lại.");
+    } finally { if (!signal?.aborted) setLoading(false); }
+  }, []);
+  useEffect(() => {
+    if (demo) return;
+    const controller = new AbortController(); fetchProducts(controller.signal);
+    return () => controller.abort();
+  }, [demo, fetchProducts]);
+  const matches = useMemo(() => {
+    const source = demo ? SAMPLE_PRODUCTS : products;
+    const selected = source.filter((product) => {
+      const matchesCategory = !category || product.category === category || String(product.category_id) === category || normalizeText(product.name).includes(normalizeText(category));
+      const amount = Number(product.price);
+      return matchesCategory && (!search || normalizeText(`${product.name} ${product.category} ${product.description}`).includes(normalizeText(search))) && (!color || product.colors.includes(color)) &&
+        (!price || (price === "quote" ? !(amount > 0) : amount > 0 && (price === "under5" ? amount < 5000000 : price === "5to10" ? amount >= 5000000 && amount <= 10000000 : amount > 10000000)));
+    });
+    return selected.sort((a, b) => {
+      if (sort === "price-up" || sort === "price-down") {
+        if (!(a.price > 0)) return b.price > 0 ? 1 : 0;
+        if (!(b.price > 0)) return -1;
+        return sort === "price-up" ? a.price - b.price : b.price - a.price;
+      }
+      return (Date.parse(b.created_at) || 0) - (Date.parse(a.created_at) || 0) || String(b.id).localeCompare(String(a.id), undefined, { numeric: true });
+    });
+  }, [products, demo, search, category, color, price, sort]);
+  const pages = Math.max(1, Math.ceil(matches.length / PAGE_SIZE));
+  const rawPage = Number(params.get("page"));
+  const page = Number.isSafeInteger(rawPage) && rawPage > 0 ? Math.min(rawPage, pages) : 1;
+  const visible = matches.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const hasFilters = search || category || color || price;
+  return <div className="wedding-catalog wc-list-page">
+    <section className="wc-hero">
+      <div className="wc-hero-copy"><nav className="wc-breadcrumb" aria-label="Đường dẫn"><Link to="/">Trang chủ</Link><span>/</span><span>Sản phẩm</span></nav><h1>Sản phẩm &amp;<br />dịch vụ cưới hỏi</h1><p>Khám phá những lựa chọn giúp ngày trọng đại của bạn trở nên trọn vẹn.</p><a className="wc-hero-cta" href="#catalog-results"><span>Tìm mẫu cho ngày cưới</span><span className="wc-hero-cta-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M12 4v16m-6-6 6 6 6-6" /></svg></span></a></div>
+      <HeroSlideshow />
+    </section>
+    <section ref={contentRef} className="wc-content" id="catalog-results">
+      <div className="wc-source-tabs" aria-label="Nguồn danh sách"><button className={!demo ? "is-active" : ""} aria-pressed={!demo} onClick={() => { const next = new URLSearchParams(); setParams(next); }}>Danh mục hiện có</button><button className={demo ? "is-active" : ""} aria-pressed={demo} onClick={() => setParams({ source: "demo" })}>8 mẫu minh họa</button></div>
+      {demo && <p className="wc-notice">Bạn đang xem 8 mẫu và giá minh họa. Hình ảnh chỉ minh họa phong cách; biểu mẫu ở chế độ demo, không gửi yêu cầu thật.</p>}
+      <div className="wc-catalog-layout">
+        <aside className="wc-filters">
+          <button className="wc-mobile-filter" aria-expanded={filtersOpen} onClick={() => setFiltersOpen(!filtersOpen)}>Bộ lọc {hasFilters ? "•" : ""}<span>{filtersOpen ? "−" : "+"}</span></button>
+          <div className={`wc-filter-body ${filtersOpen ? "is-open" : ""}`}>
+            <div className="wc-filter-heading"><h2>Tìm lựa chọn phù hợp</h2><button onClick={() => setParams(demo ? { source: "demo" } : {})}>Xóa bộ lọc</button></div>
+            <CatalogSelect label="Danh mục" value={category} onChange={(value) => change("category", value)} options={[{ value: "", label: "Tất cả danh mục" }, ...[...CATEGORIES, "Dịch vụ khác", ...(category && ![...CATEGORIES, "Dịch vụ khác"].includes(category) ? [category] : [])].map((item) => ({ value: item, label: item }))]} />
+            <CatalogSelect label="Khoảng giá" value={price} onChange={(value) => change("price", value)} options={[
+              { value: "", label: "Tất cả khoảng giá" },
+              { value: "under5", label: "Dưới 5 triệu đồng" },
+              { value: "5to10", label: "5 – 10 triệu đồng" },
+              { value: "over10", label: "Trên 10 triệu đồng" },
+              { value: "quote", label: "Liên hệ báo giá" },
+            ]} />
+            <fieldset className="wc-color-filter"><legend>Tông màu</legend><label><input type="radio" name="color" checked={!color} onChange={() => change("color", "")} />Tất cả tông màu</label>{COLORS.map((item, index) => <label key={item}><input type="radio" name="color" checked={color === item} onChange={() => change("color", item)} /><span className={`wc-color wc-color-${index}`} />{item}</label>)}</fieldset>
+            <p className="wc-filter-help">Tìm hiểu thêm về chúng tôi<br /><Link to="/gioithieu">Ngọc Thiện Wedding</Link></p>
+          </div>
+        </aside>
+        <div className="wc-results">
+          <div className="wc-results-toolbar">
+            {(demo || (!loading && !error)) && <p className="wc-result-count" aria-live="polite">{matches.length ? `${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, matches.length)} trong ${matches.length} lựa chọn` : "0 lựa chọn"}{hasFilters && <button onClick={() => setParams(demo ? { source: "demo" } : {})}>Xóa bộ lọc</button>}</p>}
+            <div className="wc-search-row"><label className="wc-search"><span className="wc-sr-only">Tìm sản phẩm</span><input type="search" placeholder="Tìm sản phẩm, dịch vụ…" value={search} onChange={(e) => change("search", e.target.value)} /><span aria-hidden="true">⌕</span></label><label className="wc-sort"><span className="wc-sr-only">Sắp xếp</span><select aria-label="Sắp xếp" value={sort} onChange={(e) => change("sort", e.target.value)}><option value="newest">Mới nhất</option><option value="price-up">Giá tăng dần</option><option value="price-down">Giá giảm dần</option></select></label></div>
+          </div>
+          {!demo && loading ? <div className="wc-state" role="status">Đang tải những lựa chọn dành cho bạn…</div> : !demo && error ? <div className="wc-state" role="alert"><h2>Danh sách tạm thời chưa tải được</h2><p>{error}</p><button className="wc-button" onClick={() => fetchProducts()}>Thử lại</button></div> : <>
+            {visible.length ? <div className="wc-grid">{visible.map((product) => <WeddingCard key={product.id} product={product} />)}</div> : <div className="wc-state"><h2>Chưa tìm thấy mẫu phù hợp</h2><p>Thử thay đổi tông màu, khoảng giá hoặc tìm bằng tên ngắn hơn.</p><button className="wc-button" onClick={() => setParams(demo ? { source: "demo" } : {})}>Xóa bộ lọc</button></div>}
+            {pages > 1 && <nav className="wc-pagination" aria-label="Phân trang"><button aria-label="Trang trước" disabled={page === 1} onClick={() => change("page", String(page - 1))}><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="m14 6-6 6 6 6" /></svg></button>{Array.from({ length: pages }, (_, i) => <button key={i} aria-current={page === i + 1 ? "page" : undefined} onClick={() => { change("page", String(i + 1)); document.getElementById("catalog-results")?.scrollIntoView({ block: "start" }); }}>{i + 1}</button>)}<button aria-label="Trang sau" disabled={page === pages} onClick={() => change("page", String(page + 1))}><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="m10 6 6 6-6 6" /></svg></button></nav>}
+          </>}
+        </div>
       </div>
     </section>
-  );
+    <section className="wc-bottom-invite"><h2>Một ngày của riêng bạn.<br />Một không gian thật riêng.</h2><p>Tìm hiểu câu chuyện và phong cách dịch vụ của Ngọc Thiện Wedding.</p><Link className="wc-button wc-button-outline" to="/gioithieu">Về Ngọc Thiện Wedding</Link></section>
+  </div>;
 };
-
 export default ProductList;

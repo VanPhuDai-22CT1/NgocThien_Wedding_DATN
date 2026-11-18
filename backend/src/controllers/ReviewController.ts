@@ -2,16 +2,42 @@ import { Response } from 'express';
 import { ProductReview, Product, Order, OrderItem } from '../models';
 import { AuthRequest } from '../middleware/auth';
 import sequelize from '../config/database';
+import { pagination } from '../utils/pagination';
 
-const COMPLETED_ORDER_STATUSES = ['delivered', 'completed'];
+const BOOKED_ORDER_STATUSES = ['confirmed', 'processing', 'shipping', 'delivered', 'completed'];
 
 class ReviewController {
+  private async reviewPermission(productId: number, userId: number) {
+    const existing = await ProductReview.findOne({ where: { product_id: productId, user_id: userId } });
+    if (existing) return { canReview: false, reason: 'already_reviewed', message: 'Bạn đã đánh giá dịch vụ này rồi.' };
+    const booking = await Order.findOne({
+      where: { user_id: userId, status: BOOKED_ORDER_STATUSES },
+      include: [{ model: OrderItem, where: { product_id: productId }, required: true }],
+    });
+    return booking
+      ? { canReview: true, reason: 'eligible', message: 'Bạn có thể đánh giá dịch vụ đã đặt.' }
+      : { canReview: false, reason: 'no_booking', message: 'Bạn chỉ có thể đánh giá khi có đơn đặt tiệc được xác nhận chứa dịch vụ này. Đơn chờ xác nhận hoặc đã hủy chưa đủ điều kiện.' };
+  }
+
+  async getEligibility(req: AuthRequest, res: Response) {
+    const productId = Number(req.params.productId);
+    if (!Number.isSafeInteger(productId) || productId < 1) return res.status(400).json({ success: false, message: 'Sản phẩm không hợp lệ.' });
+    try {
+      if (!await Product.findByPk(productId)) return res.status(404).json({ success: false, message: 'Không tìm thấy sản phẩm.' });
+      return res.json({ success: true, data: await this.reviewPermission(productId, req.user!.id) });
+    } catch (error) {
+      console.error('Review eligibility error:', error);
+      return res.status(500).json({ success: false, message: 'Chưa kiểm tra được đơn đặt tiệc. Vui lòng thử lại.' });
+    }
+  }
   async getProductReviews(req: AuthRequest, res: Response) {
+    let paging;
+    try { paging = pagination(req.query); } catch (error: any) {
+      return res.status(400).json({ success: false, message: error.message });
+    }
     try {
       const productId = req.params.productId || req.query.productId;
-      const page = Number(req.query.page || 1);
-      const limit = Number(req.query.limit || 10);
-      const offset = (page - 1) * limit;
+      const { limit, offset } = paging;
 
       if (!productId) {
         return res.status(400).json({
@@ -58,7 +84,7 @@ class ReviewController {
       const { productId, reviewer_name, rating, comment } = req.body;
       const userId = req.user?.id;
 
-      if (!productId || !rating) {
+      if (!Number.isSafeInteger(Number(productId)) || Number(productId) < 1 || !rating) {
         return res.status(400).json({
           success: false,
           message: 'Product ID and rating are required',
@@ -72,47 +98,15 @@ class ReviewController {
         });
       }
 
-      if (rating < 1 || rating > 5) {
+      if (!Number.isInteger(Number(rating)) || rating < 1 || rating > 5) {
         return res.status(400).json({
           success: false,
           message: 'Rating must be between 1 and 5',
         });
       }
-
-      const completedOrder = await Order.findOne({
-        where: {
-          user_id: userId,
-          status: COMPLETED_ORDER_STATUSES,
-        },
-        include: [
-          {
-            model: OrderItem,
-            where: { product_id: productId },
-            required: true,
-          },
-        ],
-      });
-
-      if (!completedOrder) {
-        return res.status(403).json({
-          success: false,
-          message: 'Bạn chỉ có thể đánh giá sau khi đã sử dụng và đơn dịch vụ đã hoàn tất.',
-        });
-      }
-
-      const existingReview = await ProductReview.findOne({
-        where: {
-          product_id: productId,
-          user_id: userId,
-        },
-      });
-
-      if (existingReview) {
-        return res.status(409).json({
-          success: false,
-          message: 'Bạn đã đánh giá dịch vụ này rồi.',
-        });
-      }
+      if (comment !== undefined && (typeof comment !== 'string' || comment.length > 2000)) return res.status(400).json({ success: false, message: 'Nội dung đánh giá tối đa 2000 ký tự.' });
+      const permission = await this.reviewPermission(Number(productId), userId);
+      if (!permission.canReview) return res.status(permission.reason === 'already_reviewed' ? 409 : 403).json({ success: false, message: permission.message });
 
       const review = await ProductReview.create({
         product_id: productId,

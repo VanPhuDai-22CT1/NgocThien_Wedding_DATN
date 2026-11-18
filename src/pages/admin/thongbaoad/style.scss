@@ -1,3 +1,6 @@
+
+@layer nt-admin-legacy {
+:where(.nt-admin-body) {
 $crimson: #8b1a2e;
 $gold: #b38a5a;
 $ink: #2f1e22;
@@ -433,8 +436,8 @@ $ink: #2f1e22;
 }
 
 .consult-btn-confirm {
-  background: linear-gradient(135deg, #3d9b58, #2f7d46) !important;
-  color: #fff !important;
+  background: linear-gradient(135deg, #3d9b58, #2f7d46);
+  color: #fff;
 }
 
 .consult-btn-confirm:hover {
@@ -443,8 +446,8 @@ $ink: #2f1e22;
 }
 
 .consult-btn-cancel {
-  background: linear-gradient(135deg, #d65b66, #bf3340) !important;
-  color: #fff !important;
+  background: linear-gradient(135deg, #d65b66, #bf3340);
+  color: #fff;
 }
 
 .consult-btn-cancel:hover {
@@ -507,4 +510,6 @@ $ink: #2f1e22;
   .consult-modal {
     padding: 20px 14px 16px;
   }
+}
+}
 }

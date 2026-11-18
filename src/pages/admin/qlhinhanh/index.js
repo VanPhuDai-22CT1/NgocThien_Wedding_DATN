@@ -1,21 +1,9 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiClient, buildAuthHeaders } from "utils/apiClient";
-import { NavLink } from "react-router-dom";
-import { getAuthItem, logoutAuthSession } from "utils/authStorage";
-import {
-  FaBell,
-  FaBox,
-  FaComments,
-  FaChartPie,
-  FaHistory,
-  FaHome,
-  FaImage,
-  FaRegCalendarAlt,
-  FaShoppingCart,
-  FaSignOutAlt,
-  FaUpload,
-  FaUsers,
-} from "react-icons/fa";
+
+
+import { FaUpload } from "react-icons/fa";
 import "./style.scss";
 
 import nennb1 from "assets/users/images/hero/a1.jpg";
@@ -32,7 +20,7 @@ import heroBgDefault from "assets/users/images/hero/nennen.jpg";
 import { notify } from "utils/notify";
 
 const HomeImageManagement = () => {
-  const role = getAuthItem("role");
+
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -363,64 +351,15 @@ const HomeImageManagement = () => {
     }
   }, [config.updatedAt]);
 
-  const logout = () => {
-    logoutAuthSession("/");
-  };
+
 
   return (
     <div className="home-image-admin-layout">
-      <aside className="sidebar">
-        <div className="logo">NGỌC THIỆN ADMIN</div>
 
-        <nav className="sidebar-nav">
-          <NavLink to="/dashboard">
-            <FaHome /> Tổng quan
-          </NavLink>
-
-          {role === "admin" && (
-            <NavLink to="/qlnguoidung">
-              <FaUsers /> Người dùng
-            </NavLink>
-          )}
-
-          <NavLink to="/qlsanpham">
-            <FaBox /> Dịch vụ
-          </NavLink>
-
-          <NavLink to="/qlhinhanh" className="active">
-            <FaImage /> Ảnh trang chủ
-          </NavLink>
-
-          <NavLink to="/qldonhang">
-            <FaShoppingCart /> Đơn hàng
-          </NavLink>
-
-          <NavLink to="/qltinnhan">
-            <FaComments /> Tin nhắn
-          </NavLink>
-
-          <NavLink to="/notification">
-            <FaBell /> Lịch tư vấn
-          </NavLink>
-
-          <NavLink to="/lichlamviec">
-            <FaRegCalendarAlt /> Lịch làm việc
-          </NavLink>
-
-          <NavLink to="/qlhoatdong">
-            <FaHistory /> Lịch sử
-          </NavLink>
-
-        </nav>
-
-        <button type="button" className="logout-btn" onClick={logout}>
-          <FaSignOutAlt /> Đăng xuất
-        </button>
-      </aside>
 
       <main className="content">
         <header className="content-header">
-          <h2>Quản lý ảnh trang chủ</h2>
+          <h1>Quản lý ảnh trang chủ</h1>
         </header>
 
         <div className="status-box">

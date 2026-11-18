@@ -3,9 +3,8 @@ import path from 'path';
 import dotenv from 'dotenv';
 
 const envFiles = [
-  path.resolve(__dirname, '..', '.env'),
   path.resolve(__dirname, '..', '..', '.env'),
-  path.resolve(__dirname, '..', '.env.sample'),
+  path.resolve(__dirname, '..', '..', '..', '.env'),
 ];
 
 export function loadBackendEnv() {

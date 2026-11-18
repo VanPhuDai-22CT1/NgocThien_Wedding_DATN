@@ -1,7 +1,8 @@
+import BrandWordmark from "component/BrandWordmark";
 import React, { memo, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import axios from "axios";
-import { FaSearch, FaSignOutAlt } from "react-icons/fa";
+import { FaBell, FaSearch, FaSignOutAlt } from "react-icons/fa";
 import { FaBars, FaUser } from "react-icons/fa6";
 import { CgMail } from "react-icons/cg";
 import { ROUTERS } from "utils/router";
@@ -51,8 +52,8 @@ const serviceMenuGroups = [
 
 const menus = [
   { name: "Trang chủ", path: ROUTERS.USER.HOME },
+  { name: "Sản phẩm", path: ROUTERS.USER.ProductsPage },
   { name: "Dịch vụ", path: ROUTERS.USER.ProductsPage },
-  { name: "Thông báo", path: ROUTERS.USER.Notification },
   { name: "Giới thiệu", path: ROUTERS.USER.FreshVeggiesShop },
   { name: "Đơn hàng", path: ROUTERS.USER.OrderDetail },
   { name: "Gói đã chọn", path: ROUTERS.USER.PROFILE },
@@ -65,6 +66,8 @@ const Header = () => {
 
   const [showCategories, setShowCategories] = useState(false);
   const [searchText, setSearchText] = useState("");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  useEffect(() => { setMobileMenuOpen(false); }, [location.pathname, location.hash]);
   const [username, setUsername] = useState("");
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [currentImage, setCurrentImage] = useState(0);
@@ -122,15 +125,8 @@ const Header = () => {
   }, [images.length]);
 
   useEffect(() => {
-    const delay = setTimeout(() => {
-      const keyword = searchText.trim();
-      if (!keyword) return;
-
-      navigate(`${ROUTERS.USER.ProductsPage}?search=${encodeURIComponent(keyword)}`);
-    }, 500);
-
-    return () => clearTimeout(delay);
-  }, [searchText, navigate]);
+    setSearchText(new URLSearchParams(location.search).get("search") || "");
+  }, [location.pathname, location.search]);
 
   const goToServiceCategory = (category) => {
     navigate(`${ROUTERS.USER.ProductsPage}?category=${encodeURIComponent(category)}`);
@@ -198,10 +194,11 @@ const Header = () => {
       <header className="header__main">
         <div className="header__main-inner">
           <Link to={ROUTERS.USER.HOME} className="header__logo">
-            NGỌC THIỆN
+            <BrandWordmark />
           </Link>
 
-          <nav className="header__menu">
+          <button type="button" className="header__mobile-toggle" aria-label="Mở menu điều hướng" aria-expanded={mobileMenuOpen} aria-controls="site-navigation" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}><FaBars /></button>
+          <nav id="site-navigation" className={`header__menu ${mobileMenuOpen ? "is-open" : ""}`}>
             <ul>
               {menus.map((menu) => {
                 const isServiceMenu = menu.name === "Dịch vụ";
@@ -209,7 +206,7 @@ const Header = () => {
                 if (!isServiceMenu) {
                   return (
                     <li key={menu.name}>
-                      <Link to={menu.path}>{menu.name}</Link>
+                      <Link to={menu.path} aria-current={menu.name === "Sản phẩm" && (location.pathname === "/sanpham" || location.pathname.startsWith("/chitietsanpham/")) ? "page" : undefined}>{menu.name}</Link>
                     </li>
                   );
                 }
@@ -243,24 +240,29 @@ const Header = () => {
             </ul>
           </nav>
 
-          <div className="header__search">
+          <div className="header__actions">
+          <form className="header__search" role="search" aria-label="Tìm kiếm trên website" onSubmit={(event) => {
+            event.preventDefault();
+            const keyword = searchText.trim();
+            navigate(keyword ? `${ROUTERS.USER.ProductsPage}?search=${encodeURIComponent(keyword)}` : ROUTERS.USER.ProductsPage);
+            setMobileMenuOpen(false);
+          }}>
             <input
+              type="search"
+              aria-label="Tìm kiếm dịch vụ"
               placeholder="Tìm kiếm dịch vụ..."
+              maxLength={120}
               value={searchText}
               onChange={(event) => setSearchText(event.target.value)}
             />
             <button
-              type="button"
-              onClick={() => {
-                const keyword = searchText.trim();
-                if (keyword) {
-                  navigate(`${ROUTERS.USER.ProductsPage}?search=${encodeURIComponent(keyword)}`);
-                }
-              }}
+              type="submit"
               aria-label="Tìm kiếm"
             >
               <FaSearch />
             </button>
+          </form>
+          <Link className="header__notification" to={ROUTERS.USER.Notification} aria-label="Thông báo" title="Thông báo" aria-current={location.pathname === ROUTERS.USER.Notification ? "page" : undefined}><FaBell aria-hidden="true" /></Link>
           </div>
         </div>
       </header>

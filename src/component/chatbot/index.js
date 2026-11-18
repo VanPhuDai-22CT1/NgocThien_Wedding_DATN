@@ -1,553 +1,303 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
-import axios from "axios";
-import { FaRobot, FaPaperPlane } from "react-icons/fa";
-import { useNavigate } from "react-router-dom";
+import React, { useCallback, useEffect, useLayoutEffect, useId, useMemo, useRef, useState } from "react";
+import { Link, useLocation } from "react-router-dom";
+import BrandWordmark from "component/BrandWordmark";
+import { apiClient } from "utils/apiClient";
 import { getAuthItem } from "utils/authStorage";
-import { getImageUrl, getProductImage } from "utils/image";
+import ChatMessage, { AssistantIcon } from "./ChatMessage";
 import "./style.scss";
 
-const API = `${process.env.REACT_APP_API_URL || "/api"}/legacy`;
-const CHAT_SESSION_KEY_PREFIX = "wedding_live_chat_session";
-
-const isValidEmail = (value = "") => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
-const isPhoneNumber = (value = "") => /^[0-9+\s.()-]{9,16}$/.test(value.trim());
-
-const normalizeText = (value = "") =>
-  String(value)
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/đ/g, "d")
-    .trim();
-
-const formatMoney = (value) => Number(value || 0).toLocaleString("vi-VN") + " VNĐ";
-
-const SERVICE_KNOWLEDGE = {
-  overview:
-    "Ngọc Thiện Wedding nhận tổ chức dịch vụ cưới hỏi trọn gói tại Quảng Ngãi và khu vực lân cận: nấu tiệc, dàn nhạc, trang trí gia tiên, trang trí sân khấu, rạp cưới, bàn ghế, xe hoa và hỗ trợ lên kịch bản ngày cưới.",
-  address:
-    "Địa chỉ: Thôn An Tây, Xã Trà Giang, Quảng Ngãi. Hotline tư vấn: 0366 531 939.",
-  process:
-    "Quy trình đặt dịch vụ gồm 4 bước: 1. Trao đổi nhu cầu và ngày tổ chức. 2. Tư vấn gói phù hợp theo số bàn/khách. 3. Chốt báo giá và đặt cọc giữ lịch. 4. Chuẩn bị, thi công và bàn giao trong ngày tiệc.",
-  deposit:
-    "Thông thường khách đặt cọc khoảng 30% để giữ lịch. Phần còn lại thanh toán sau khi hoàn thành chương trình hoặc theo thỏa thuận trong hợp đồng.",
-  menu:
-    "Dịch vụ nấu tiệc có thể tư vấn theo ngân sách từng bàn. Mâm tiệc thường gồm khai vị, món chính, lẩu hoặc món nước, tráng miệng. Nếu bạn cho biết số bàn và mức giá mong muốn, tôi sẽ ước tính nhanh giúp bạn.",
-  decoration:
-    "Trang trí gia tiên và sân khấu có thể làm theo phong cách truyền thống, sang trọng đỏ vàng, pastel nhẹ nhàng hoặc hiện đại. Gói thường gồm phông nền, hoa, bàn gallery, cổng hoa, lối đi và ánh sáng tùy nhu cầu.",
-  music:
-    "Dàn nhạc có thể gồm âm thanh, ánh sáng, ca sĩ/MC, nhạc sống hoặc DJ tùy quy mô tiệc. Gói cơ bản phù hợp tiệc gia đình; gói nâng cao phù hợp sân khấu lớn hoặc ngoài trời.",
-  car:
-    "Xe hoa có thể trang trí theo tone cưới: đỏ, trắng, hồng pastel hoặc vàng champagne. Bạn nên đặt sớm để giữ xe đẹp và đồng bộ màu hoa với sân khấu/gia tiên.",
-  timing:
-    "Bạn nên liên hệ trước 2-4 tuần với tiệc nhỏ, và trước 1-2 tháng với tiệc lớn hoặc ngày đẹp để giữ lịch dàn nhạc, rạp và đội thi công.",
+const welcome = () => [{ id: "welcome", role: "assistant", text: "Chào bạn, tôi là trợ lý của Ngọc Thiện Wedding. Tôi có thể tìm mẫu, đối chiếu giá trong danh mục và giúp bạn chuẩn bị ngày cưới. Bạn đang cần hỗ trợ điều gì?" }];
+const suggestions = ["Tư vấn trang trí gia tiên", "Tìm gói cưới theo ngân sách", "Xem mẫu mâm quả cưới hỏi", "Tìm hiểu quy trình đặt dịch vụ"];
+const uuid = () => window.crypto.randomUUID();
+const readHistory = (key) => {
+  try {
+    const items = JSON.parse(sessionStorage.getItem(key) || "null");
+    if (Array.isArray(items)) {
+      const valid = items.filter((item) => item && ["user", "assistant"].includes(item.role) && typeof item.text === "string").slice(-60);
+      if (valid.length) { if (valid[valid.length - 1].role === "user") valid[valid.length - 1].failed = true; return valid; }
+    }
+  } catch { /* Storage can be unavailable in private browsing. */ }
+  return welcome();
 };
-
-const QUICK_REPLIES = [
-  "Tư vấn gói cưới trọn gói",
-  "Báo giá 30 bàn",
-  "Trang trí gia tiên gồm gì?",
-  "Dàn nhạc và MC",
-  "Xe hoa cưới",
-  "Đặt lịch tư vấn",
-  "Liên hệ nhân viên",
-];
-
-const detectIntent = (message = "") => {
-  const text = normalizeText(message);
-
-  if (isValidEmail(message)) return "email";
-  if (isPhoneNumber(message) && /\d{9,11}/.test(message.replace(/\D/g, ""))) return "phone";
-  if (/(nhan vien|tu van vien|goi lai|lien he|hotline|support|gap nguoi)/.test(text)) return "human";
-  if (/(dia chi|o dau|cho nao|vi tri|quang ngai)/.test(text)) return "address";
-  if (/(dat coc|coc|thanh toan|chuyen khoan|tien mat|hop dong)/.test(text)) return "deposit";
-  if (/(quy trinh|dat lich|giu lich|bao lau|chuan bi|hen tu van|lich tu van)/.test(text)) return "process";
-  if (/(nau an|nau tiec|mam|thuc don|mon an|ban tiec|so ban|bao nhieu ban|khach)/.test(text)) return "menu";
-  if (/(gia|bao gia|chi phi|du toan|tinh tien|tong tien|ngan sach)/.test(text)) return "price";
-  if (/(trang tri|gia tien|san khau|cong hoa|rap|ban gallery|hoa tuoi)/.test(text)) return "decoration";
-  if (/(dan nhac|am thanh|anh sang|mc|ca si|dj|nhac song)/.test(text)) return "music";
-  if (/(xe hoa|xe cuoi|trang tri xe)/.test(text)) return "car";
-  if (/(san pham|dich vu|goi cuoi|goi dich vu|noi bat|combo)/.test(text)) return "products";
-  if (/(chao|hello|hi|xin chao)/.test(text)) return "greeting";
-
-  return "unknown";
-};
-
-const estimatePrice = (message = "") => {
-  const text = normalizeText(message);
-  const numbers = [...text.matchAll(/\d+/g)].map((match) => Number(match[0]));
-  const tableCount = numbers.find((n) => n >= 5 && n <= 300);
-  const guestCount = numbers.find((n) => n >= 50 && n <= 3000);
-
-  if (tableCount) {
-    const foodLow = tableCount * 2200000;
-    const foodHigh = tableCount * 3200000;
-    const decoration = 4000000;
-    const music = 5000000;
-    return `Với khoảng ${tableCount} bàn, chi phí tham khảo:
-
-- Nấu tiệc: ${formatMoney(foodLow)} - ${formatMoney(foodHigh)}
-- Trang trí gia tiên/sân khấu cơ bản: từ ${formatMoney(decoration)}
-- Dàn nhạc/âm thanh: từ ${formatMoney(music)}
-
-Tổng dự kiến: ${formatMoney(foodLow + decoration + music)} - ${formatMoney(foodHigh + decoration + music)}.
-Giá chính xác còn tùy thực đơn, địa điểm, ngày tổ chức và mức trang trí bạn chọn.`;
+const historyFor = (items) => {
+  const result = []; let size = 0;
+  for (const item of [...items].reverse()) {
+    if (item.id === "welcome" || item.failed || item.private || !["assistant", "user"].includes(item.role)) continue;
+    const content = item.text.slice(0, 4000); if (size + content.length > 22000 || result.length >= 12) break;
+    result.unshift({ role: item.role, content }); size += content.length;
   }
-
-  if (guestCount) {
-    const estimatedTables = Math.ceil(guestCount / 10);
-    return `Nếu khoảng ${guestCount} khách, mình ước tính khoảng ${estimatedTables} bàn. Chi phí sẽ phụ thuộc thực đơn từng bàn. Bạn có thể cho mình mức ngân sách mỗi bàn, ví dụ 2.500.000 hoặc 3.000.000 VNĐ/bàn, tôi sẽ tính sát hơn.`;
-  }
-
-  return "Bạn cho tôi biết số bàn hoặc số khách dự kiến nhé. Ví dụ: “báo giá 30 bàn” hoặc “tiệc 300 khách”. Tôi sẽ ước tính chi phí nấu tiệc, trang trí, dàn nhạc và xe hoa cho bạn.";
+  return result;
 };
-
-const buildAnswer = (intent, message) => {
-  switch (intent) {
-    case "greeting":
-      return `Xin chào, tôi là Wedding AI của Ngọc Thiện Wedding.
-
-Tôi có thể tư vấn nhanh về nấu tiệc, dàn nhạc, trang trí gia tiên, sân khấu, xe hoa, báo giá theo số bàn và quy trình đặt lịch. Bạn đang chuẩn bị tiệc khoảng bao nhiêu bàn?`;
-    case "address":
-      return SERVICE_KNOWLEDGE.address;
-    case "deposit":
-      return SERVICE_KNOWLEDGE.deposit;
-    case "process":
-      return SERVICE_KNOWLEDGE.process;
-    case "menu":
-      return `${SERVICE_KNOWLEDGE.menu}
-
-Gợi ý nhanh:
-- Tiệc gia đình ấm cúng: thực đơn vừa phải, ưu tiên món dễ ăn.
-- Tiệc cưới sang trọng: món khai vị, hải sản, lẩu, tráng miệng.
-- Tiệc ngoài trời: ưu tiên món dễ phục vụ, giữ nhiệt tốt.`;
-    case "price":
-      return estimatePrice(message);
-    case "decoration":
-      return `${SERVICE_KNOWLEDGE.decoration}
-
-Nếu bạn gửi tone màu yêu thích, số lượng bàn và địa điểm tổ chức, tôi có thể gợi ý concept phù hợp hơn.`;
-    case "music":
-      return `${SERVICE_KNOWLEDGE.music}
-
-Để chọn gói phù hợp, bạn cho tôi biết tiệc trong nhà hay ngoài trời, số khách và có cần MC/ca sĩ không nhé.`;
-    case "car":
-      return `${SERVICE_KNOWLEDGE.car}
-
-Bạn muốn xe hoa tone đỏ truyền thống, trắng tinh tế hay pastel nhẹ nhàng?`;
-    case "products":
-      return SERVICE_KNOWLEDGE.overview;
-    default:
-      return `Tôi có thể hỗ trợ các câu hỏi về:
-
-- Báo giá theo số bàn/số khách
-- Nấu tiệc và thực đơn
-- Trang trí gia tiên, sân khấu, rạp cưới
-- Dàn nhạc, MC, âm thanh ánh sáng
-- Xe hoa và lịch đặt dịch vụ
-- Đặt cọc, thanh toán, quy trình hợp đồng
-
-Bạn có thể hỏi ví dụ: “tiệc 30 bàn giá bao nhiêu?”, “trang trí gia tiên gồm gì?”, hoặc “cần đặt trước bao lâu?”.`;
-  }
+const readWorkspace = (key) => {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(`${key}:workspace`) || "null");
+    const threads = saved?.threads?.filter((thread) => typeof thread.id === "string" && Array.isArray(thread.messages)).map((thread) => ({ ...thread,
+      messages: thread.messages.filter((item) => item && ["user", "assistant"].includes(item.role) && typeof item.text === "string"),
+      draft: typeof thread.draft === "string" ? thread.draft.slice(0, 4000) : "",
+    }));
+    if (threads?.length) return { threads, activeId: threads.some((thread) => thread.id === saved.activeId) ? saved.activeId : threads[0].id };
+  } catch { /* Migrate the existing single conversation below. */ }
+  let draft = ""; try { draft = sessionStorage.getItem(`${key}:draft`) || ""; } catch { /* Memory fallback. */ }
+  const thread = { id: uuid(), messages: readHistory(key), draft, updatedAt: new Date().toISOString() };
+  return { threads: [thread], activeId: thread.id };
 };
+const failureFor = (items) => items.at(-1)?.role === "user" ? items.at(-1).failure || { text: items.at(-1).text, userId: items.at(-1).id, history: historyFor(items.slice(0, -1)), message: "Tin nhắn trước chưa hoàn tất. Bạn có thể gửi lại.", mode: "ai" } : null;
 
-const ChatBot = () => {
-  const navigate = useNavigate();
+function WeddingAssistant({ scope, pathname }) {
+  const panelId = useId();
+  const historyKey = `nt_wedding_ai_v2:${scope}`;
+  const workspace = useMemo(() => readWorkspace(historyKey), [historyKey]);
+  const archive = useRef(workspace);
+  const [threads, setThreads] = useState(workspace.threads);
+  const [activeId, setActiveId] = useState(workspace.activeId);
+  const initial = workspace.threads.find((thread) => thread.id === workspace.activeId).messages;
+  const [aiMessages, setAiMessages] = useState(initial);
+  const [supportMessages, setSupportMessages] = useState([]);
+  const [supportLoading, setSupportLoading] = useState(false);
   const [open, setOpen] = useState(false);
-  const [input, setInput] = useState("");
-  const [typing, setTyping] = useState(false);
-  const [humanMode, setHumanMode] = useState(false);
-  const [chatSession, setChatSession] = useState("");
-  const chatRef = useRef(null);
+  const [expanded, setExpanded] = useState(false);
+  const [mode, setMode] = useState("ai");
+  const [input, setInput] = useState(() => workspace.threads.find((thread) => thread.id === workspace.activeId).draft);
+  const drafts = useRef({ ai: input, support: "" });
+  const [navOpen, setNavOpen] = useState(false);
+  const [unread, setUnread] = useState(false);
+  const [online, setOnline] = useState(navigator.onLine);
+  const [storageError, setStorageError] = useState(false);
+  const [mobile, setMobile] = useState(window.matchMedia("(max-width: 700px)").matches);
+  const sidebar = useRef(null); const menuButton = useRef(null);
+  const [pending, setPending] = useState(false);
+  const [capabilities, setCapabilities] = useState(null);
+  const [notice, setNotice] = useState("");
+  const [supportError, setSupportError] = useState("");
+  const [feedback, setFeedback] = useState("");
+  const [failure, setFailure] = useState(() => failureFor(initial));
+  const [viewport, setViewport] = useState({ height: window.innerHeight, offset: 0, top: 0 });
+  const [supportSession] = useState(() => {
+    const key = `nt_wedding_support_v2:${scope}`;
+    try { const value = localStorage.getItem(key); if (/^nt_[a-f0-9-]{36}$/i.test(value)) return value; const session = `nt_${uuid()}`; localStorage.setItem(key, session); return session; }
+    catch { return `nt_${uuid()}`; }
+  });
+  const launcher = useRef(null); const composer = useRef(null); const log = useRef(null);
+  const wasOpen = useRef(false); const hadNav = useRef(false);
+  const request = useRef(null); const busy = useRef(false); const alive = useRef(true); const autoScroll = useRef(true);
+  const messages = mode === "ai" ? aiMessages : supportMessages;
+  const lastMessageId = messages.at(-1)?.id;
+  const productMatch = pathname.match(/^\/chitietsanpham\/(\d+)$/);
+  const productId = productMatch ? Number(productMatch[1]) : undefined;
+  useLayoutEffect(() => {
+    if (!open && wasOpen.current) launcher.current?.focus();
+    if (open && !navOpen && hadNav.current) menuButton.current?.focus();
+    wasOpen.current = open; hadNav.current = navOpen;
+  }, [open, navOpen]);
 
-  const [messages, setMessages] = useState([
-    {
-      from: "bot",
-      text: "Xin chào! Tôi là Wedding AI của Ngọc Thiện Wedding. Bạn cần tư vấn nấu tiệc, trang trí, dàn nhạc, xe hoa hay báo giá theo số bàn?",
-    },
-  ]);
-
-  const currentUserId = String(getAuthItem("user_id") || "").trim();
-  const currentUsername = String(getAuthItem("username") || "").trim();
-  const currentEmail = String(getAuthItem("email") || "").trim();
-
-  const accountScopeKey = currentUserId
-    ? `user_${currentUserId}`
-    : currentEmail
-      ? `guest_${currentEmail.toLowerCase()}`
-      : currentUsername
-        ? `guest_${currentUsername.toLowerCase()}`
-        : "guest_anonymous";
-
-  const storageSessionKey = `${CHAT_SESSION_KEY_PREFIX}_${accountScopeKey}`;
-
-  const getOrCreateChatSession = useCallback(() => {
-    if (currentUserId) return `live_user_${currentUserId}`;
-
-    const existed = window.localStorage.getItem(storageSessionKey);
-    if (existed) return existed;
-
-    const nextSession = `chat_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    window.localStorage.setItem(storageSessionKey, nextSession);
-    return nextSession;
-  }, [currentUserId, storageSessionKey]);
-
-  const appendBotMessage = (text) => {
-    setMessages((prev) => [...prev, { from: "bot", text }]);
-  };
-
-  const goToProductDetail = (productId) => {
-    if (!productId) return;
-    navigate(`/chitietsanpham/${productId}`);
-    setOpen(false);
-  };
-
-  const loadLiveMessages = useCallback(async (forceSession) => {
-    const activeSession = forceSession || chatSession || getOrCreateChatSession();
-    if (!activeSession) return;
-
-    try {
-      const res = await axios.get(`${API}?action=getLiveChatMessages&chat_session=${encodeURIComponent(activeSession)}&_=${Date.now()}`);
-      if (!res.data?.success) return;
-
-      const rows = Array.isArray(res.data.data) ? res.data.data : [];
-      if (rows.length === 0) {
-        setMessages([
-          {
-            from: "bot",
-            text: "Bạn đang ở chế độ liên hệ nhân viên. Hãy để lại câu hỏi, nhân viên sẽ phản hồi trong khung chat này.",
-          },
-        ]);
-        return;
+  useEffect(() => { alive.current = true; return () => { alive.current = false; request.current?.abort(); }; }, []);
+  useEffect(() => {
+    const draft = mode === "ai" ? input : drafts.current.ai;
+    archive.current = { activeId, threads: archive.current.threads.map((thread) => thread.id === activeId ? { ...thread, messages: aiMessages, draft, updatedAt: new Date().toISOString() } : thread) };
+    setThreads(archive.current.threads);
+    try { sessionStorage.setItem(`${historyKey}:workspace`, JSON.stringify(archive.current)); setStorageError(false); }
+    catch { setStorageError(true); }
+  }, [aiMessages, input, activeId, historyKey, mode]);
+  useEffect(() => {
+    const update = () => setOnline(navigator.onLine);
+    window.addEventListener("online", update); window.addEventListener("offline", update);
+    return () => { window.removeEventListener("online", update); window.removeEventListener("offline", update); };
+  }, []);
+  useEffect(() => {
+    if (!open) return;
+    const controller = new AbortController();
+    apiClient.get("/assistant/status", { signal: controller.signal }).then((response) => { if (!controller.signal.aborted && response.data.success) setCapabilities(response.data.data); }).catch(() => { if (!controller.signal.aborted) setCapabilities({ unavailable: true }); });
+    return () => controller.abort();
+  }, [open]);
+  useEffect(() => {
+    if (!open) return;
+    const resize = () => {
+      const view = window.visualViewport;
+      const offset = Math.max(0, window.innerHeight - (view?.height || window.innerHeight) - (view?.offsetTop || 0));
+      setViewport({ height: view?.height || window.innerHeight, offset, top: view?.offsetTop || 0 });
+      setMobile(window.matchMedia("(max-width: 700px)").matches);
+    };
+    resize(); window.addEventListener("resize", resize); window.visualViewport?.addEventListener("resize", resize); window.visualViewport?.addEventListener("scroll", resize);
+    const focus = requestAnimationFrame(() => window.matchMedia("(max-width: 700px)").matches ? document.getElementById(panelId)?.focus() : composer.current?.focus());
+    return () => { cancelAnimationFrame(focus); window.removeEventListener("resize", resize); window.visualViewport?.removeEventListener("resize", resize); window.visualViewport?.removeEventListener("scroll", resize); };
+  }, [open, panelId]);
+  useEffect(() => {
+    if (open && autoScroll.current && log.current) { log.current.scrollTop = log.current.scrollHeight; setUnread(false); }
+    else if (open && !autoScroll.current) setUnread(true);
+  }, [open, lastMessageId, pending, mode]);
+  useEffect(() => {
+    if (!composer.current) return;
+    composer.current.style.height = "auto"; composer.current.style.height = `${Math.min(112, composer.current.scrollHeight)}px`;
+  }, [input, open]);
+  const close = useCallback(() => { setOpen(false); setNavOpen(false); launcher.current?.focus(); }, []);
+  useEffect(() => {
+    if (!open) return;
+    const outside = (event) => {
+      if (document.getElementById(panelId)?.contains(event.target) || launcher.current?.contains(event.target)) return;
+      close();
+    };
+    document.addEventListener("pointerdown", outside, true);
+    return () => document.removeEventListener("pointerdown", outside, true);
+  }, [open, close, panelId]);
+  useEffect(() => {
+    if (!open) return;
+    const escape = (event) => {
+      if (event.key === "Escape") { event.preventDefault(); if (navOpen) { setNavOpen(false); menuButton.current?.focus(); } else close(); }
+      if (event.key === "Tab" && navOpen) {
+        const root = sidebar.current;
+        const buttons = [...(root?.querySelectorAll('button:not(:disabled), a[href], textarea') || [])].filter((item) => item.getClientRects().length);
+        const first = buttons[0]; const last = buttons.at(-1);
+        if (event.shiftKey && (document.activeElement === first || !root?.contains(document.activeElement))) { event.preventDefault(); last?.focus(); }
+        else if (!event.shiftKey && (document.activeElement === last || !root?.contains(document.activeElement))) { event.preventDefault(); first?.focus(); }
       }
-
-      setMessages(rows.map((item) => {
-        let payloadData = null;
-        if (item.payload_json) {
-          try {
-            payloadData = JSON.parse(item.payload_json);
-          } catch {
-            payloadData = null;
-          }
+    };
+    document.addEventListener("keydown", escape); return () => document.removeEventListener("keydown", escape);
+  }, [open, close, navOpen, mobile, panelId]);
+  useEffect(() => {
+    if (!open || mode !== "support") return;
+    setSupportLoading(true);
+    let stopped = false; let timer; const controller = new AbortController();
+    const poll = async () => {
+      try {
+        const response = await apiClient.get("/assistant/support/messages", { params: { session: supportSession }, signal: controller.signal });
+        if (!response.data.success || !Array.isArray(response.data.data)) throw new Error();
+        if (!stopped) {
+          setSupportMessages((previous) => [...new Map([...previous, ...response.data.data.map((item) => ({ id: item.id, role: item.sender_type === "admin" ? "admin" : "user", text: item.message, createdAt: item.created_at }))].map((item) => [item.id, item])).values()].sort((a, b) => Number(a.id) - Number(b.id)).slice(-100));
+          setSupportError("");
         }
+      } catch { if (!stopped) setSupportError("Chưa tải được phản hồi mới. Hệ thống sẽ thử kết nối lại."); }
+      finally { if (!stopped) setSupportLoading(false); }
+      if (!stopped) timer = setTimeout(poll, 4000);
+    };
+    poll(); return () => { stopped = true; clearTimeout(timer); controller.abort(); };
+  }, [open, mode, supportSession]);
 
-        return {
-          id: item.id,
-          from: item.sender === "admin" ? "admin" : "user",
-          text: item.message || "",
-          products:
-            item.message_type === "product" && payloadData
-              ? [{
-                  id: payloadData.id || item.id,
-                  name: payloadData.name || "Dịch vụ",
-                  price: Number(payloadData.price || 0),
-                  cover: getProductImage(payloadData),
-                }]
-              : undefined,
-        };
-      }));
-    } catch (error) {
-      console.error("Load live chat messages error:", error);
-    }
-  }, [chatSession, getOrCreateChatSession]);
-
-  const sendLiveMessage = async (msgText = input) => {
-    const textValue = String(msgText || "").trim();
-    if (!textValue) return;
-
-    const session = chatSession || getOrCreateChatSession();
-    const userId = Number(getAuthItem("user_id") || 0);
-    const username = getAuthItem("username") || "Khách hàng";
-    const email = getAuthItem("email") || "";
-
-    setMessages((prev) => [...prev, { from: "user", text: textValue }]);
-    setInput("");
-
+  const ask = async (text, history, append = true, userId) => {
+    if (busy.current) return;
+    const id = userId || uuid(); const controller = new AbortController(); request.current = controller;
+    busy.current = true; setPending(true); setFailure(null); setNotice(""); setFeedback(""); autoScroll.current = true;
+    setInput((current) => current.trim() === text ? "" : current);
+    setAiMessages((previous) => append ? [...previous, { id, role: "user", text, createdAt: new Date().toISOString() }] : previous.map((item) => item.id === id ? { ...item, failed: false, failure: null } : item));
     try {
-      const res = await axios.post(
-        `${API}?action=sendLiveChatMessage`,
-        {
-          chat_session: session,
-          user_id: userId,
-          customer_name: username,
-          customer_email: isValidEmail(email) ? email : "",
-          sender: "customer",
-          message: textValue,
-          message_type: "text",
-        },
-        { headers: { "Content-Type": "application/json" } }
-      );
-
-      if (res.data?.success) {
-        const nextSession = res.data.chat_session || session;
-        setChatSession(nextSession);
-        if (!currentUserId) {
-          window.localStorage.setItem(storageSessionKey, nextSession);
-        }
-      }
-    } catch (error) {
-      console.error("Send live chat error:", error);
-      appendBotMessage("Không thể gửi tin nhắn cho nhân viên lúc này. Bạn vui lòng thử lại hoặc gọi hotline 0366 531 939.");
-    }
-  };
-
-  const saveBotMessage = async (message, extra = {}) => {
-    const storedUsername = getAuthItem("username") || "";
-    const storedEmail = getAuthItem("email") || "";
-    const customerEmail = isValidEmail(storedEmail)
-      ? storedEmail.trim()
-      : (isValidEmail(storedUsername) ? storedUsername.trim() : "");
-    const customerName = (storedUsername || "Khách").trim() || "Khách";
-
-    try {
-      await axios.post(`${API}?action=saveChatbotMessage`, {
-        name: customerName,
-        email: customerEmail,
-        message,
-        ...extra,
+      const response = await apiClient.post("/assistant/message", { message: text, history, ...(productId ? { productId } : {}) }, { signal: controller.signal, timeout: 35000 });
+      if (!response.data.success || typeof response.data.data?.text !== "string") throw new Error();
+      if (!alive.current || controller.signal.aborted) return;
+      const answer = response.data.data;
+      const answerId = uuid(); const follow = autoScroll.current;
+      if (follow) autoScroll.current = false;
+      setAiMessages((previous) => [...previous, { ...answer, id: answerId, role: "assistant", createdAt: new Date().toISOString() }]); setNotice(answer.notice || "");
+      if (follow) requestAnimationFrame(() => {
+        const item = log.current?.querySelector(`[data-message-id="${answerId}"]`);
+        if (item && log.current) log.current.scrollTop += item.getBoundingClientRect().top - log.current.getBoundingClientRect().top - 8;
       });
-    } catch {
-      // Chat should continue even if logging fails.
-    }
+    } catch (error) {
+      if (!alive.current) return;
+      const failed = { text, userId: id, history, mode: "ai", stopped: controller.signal.aborted, message: controller.signal.aborted ? "Đã dừng câu trả lời. Bạn có thể gửi lại khi muốn." : error.response?.data?.message || "Chưa gửi được câu hỏi. Nội dung vẫn được giữ lại, bạn có thể thử lại." };
+      setAiMessages((previous) => previous.map((item) => item.id === id ? { ...item, failed: true, failure: failed } : item));
+      setFailure(failed);
+      setInput((current) => current || text);
+    } finally { if (alive.current) { busy.current = false; setPending(false); } }
   };
-
-  useEffect(() => {
-    const session = getOrCreateChatSession();
-    setChatSession(session);
-  }, [getOrCreateChatSession, accountScopeKey]);
-
-  useEffect(() => {
-    if (!open || !humanMode) return;
-
-    const session = chatSession || getOrCreateChatSession();
-    loadLiveMessages(session);
-
-    const timer = setInterval(() => {
-      loadLiveMessages(session);
-    }, 3000);
-
-    return () => clearInterval(timer);
-  }, [open, humanMode, chatSession, getOrCreateChatSession, loadLiveMessages]);
-
-  useEffect(() => {
-    if (chatRef.current) {
-      chatRef.current.scrollTop = chatRef.current.scrollHeight;
-    }
-  }, [messages, typing]);
-
-  const reply = (text) => {
-    setTimeout(() => {
-      appendBotMessage(text);
-      setTyping(false);
-    }, 650);
-    setInput("");
-  };
-
-  const showProducts = async () => {
+  const sendSupport = async (text) => {
+    if (busy.current) return;
+    busy.current = true; setPending(true); setFailure(null); setFeedback(""); autoScroll.current = true;
+    setInput((current) => current.trim() === text ? "" : current);
+    const controller = new AbortController(); request.current = controller;
     try {
-      const res = await axios.get(`${API}?action=getProducts`);
-      if (res.data?.success) {
-        const products = (res.data.data || []).slice(0, 3);
-        setTimeout(() => {
-          setMessages((prev) => [
-            ...prev,
-            {
-              from: "bot",
-              text: "Một số dịch vụ nổi bật bạn có thể tham khảo:",
-              products,
-            },
-          ]);
-          setTyping(false);
-        }, 650);
-        return true;
-      }
-    } catch {
-      // Fall back to text answer.
-    }
-
-    return false;
+      const response = await apiClient.post("/assistant/support/message", { session: supportSession, message: text }, { signal: controller.signal });
+      if (!response.data.success || !response.data.data?.id) throw new Error();
+      if (!alive.current) return;
+      const row = response.data.data;
+      setSupportMessages((previous) => [...previous.filter((item) => item.id !== row.id), { id: row.id, role: "user", text: row.message, createdAt: row.created_at }]);
+      setFeedback("Tin nhắn đã được gửi. Phản hồi của nhân viên sẽ hiển thị tại đây.");
+    } catch (error) {
+      if (!alive.current) return;
+      setFailure({ text, mode: "support", message: error.response?.data?.message || "Tin nhắn chưa gửi được. Vui lòng thử lại." }); setInput((current) => current || text);
+    } finally { if (alive.current) { busy.current = false; setPending(false); } }
   };
-
-  const switchToHuman = async (messageToSend = "") => {
-    setHumanMode(true);
-    const session = chatSession || getOrCreateChatSession();
-    setChatSession(session);
-    appendBotMessage("Đã chuyển sang chế độ liên hệ nhân viên. Bạn cứ nhắn nhu cầu, nhân viên Ngọc Thiện Wedding sẽ phản hồi tại đây.");
-    if (messageToSend) {
-      await sendLiveMessage(messageToSend);
-    }
+  const send = (value = input) => {
+    const text = String(value).trim(); if (!text || busy.current) return;
+    if (!navigator.onLine) { setFeedback("Bạn đang mất kết nối. Nội dung được giữ lại để gửi khi có mạng."); return; }
+    if (text.length > (mode === "support" ? 2000 : 4000)) { setFeedback(`Vui lòng rút gọn tin nhắn còn tối đa ${mode === "support" ? 2000 : 4000} ký tự.`); return; }
+    if (mode === "support") sendSupport(text);
+    else if (failure?.mode === "ai" && failure.text === text) ask(text, failure.history, false, failure.userId);
+    else ask(text, historyFor(aiMessages));
   };
-
-  const sendMessage = async (msgText = input) => {
-    const cleanText = String(msgText || "").trim();
-    if (!cleanText) return;
-
-    if (humanMode) {
-      await sendLiveMessage(cleanText);
-      return;
-    }
-
-    setMessages((prev) => [...prev, { from: "user", text: cleanText }]);
-    setTyping(true);
-    setInput("");
-    await saveBotMessage(cleanText);
-
-    const intent = detectIntent(cleanText);
-
-    if (intent === "email") {
-      await saveBotMessage("Khách để lại email", { email: cleanText });
-      reply(`Đã nhận email của bạn: ${cleanText}.
-
-Ngọc Thiện Wedding sẽ liên hệ để tư vấn chi tiết về dịch vụ, ngày tiệc và báo giá phù hợp.`);
-      return;
-    }
-
-    if (intent === "phone") {
-      await saveBotMessage("Khách để lại số điện thoại", { phone: cleanText });
-      reply(`Cảm ơn bạn. Tôi đã ghi nhận số điện thoại: ${cleanText}.
-
-Nhân viên sẽ liên hệ tư vấn về dịch vụ cưới hỏi, báo giá và lịch tổ chức. Hotline cần gọi nhanh: 0366 531 939.`);
-      return;
-    }
-
-    if (intent === "human") {
-      setTyping(false);
-      await switchToHuman(cleanText);
-      return;
-    }
-
-    if (intent === "products") {
-      const loaded = await showProducts();
-      if (loaded) return;
-    }
-
-    reply(buildAnswer(intent, cleanText));
+  const switchMode = (next) => { if (busy.current || next === mode) return; drafts.current[mode] = input; setInput(drafts.current[next]); setMode(next); setFeedback(""); setNavOpen(false); autoScroll.current = true; composer.current?.focus(); };
+  const openThread = (thread) => {
+    if (busy.current) return;
+    drafts.current[mode] = input;
+    setMode("ai"); setActiveId(thread.id); setAiMessages(thread.messages); setInput(thread.draft || ""); drafts.current.ai = thread.draft || "";
+    setFailure(failureFor(thread.messages)); setNotice(""); setFeedback(""); setNavOpen(false); setUnread(false); autoScroll.current = true;
+    requestAnimationFrame(() => mobile ? document.getElementById(panelId)?.focus() : composer.current?.focus());
   };
-
-  const handleKey = (e) => {
-    if (e.key === "Enter") {
-      sendMessage();
-    }
+  const clearAI = () => {
+    if (busy.current) return;
+    const thread = { id: uuid(), messages: welcome(), draft: "", updatedAt: new Date().toISOString() };
+    archive.current = { ...archive.current, threads: [thread, ...archive.current.threads] };
+    openThread(thread);
   };
+  const toLatest = () => { if (log.current) log.current.scrollTop = log.current.scrollHeight; autoScroll.current = true; setUnread(false); };
+  const retry = () => mode === "ai" ? ask(failure.text, failure.history, false, failure.userId) : sendSupport(failure.text);
+  const toggleNav = () => { setNavOpen((value) => !value); if (!navOpen) requestAnimationFrame(() => sidebar.current?.querySelector("button")?.focus()); };
 
-  return (
-    <div className="chatbot">
-      <button
-        type="button"
-        className="chatbot-toggle"
-        onClick={() => setOpen(!open)}
-        aria-label="Mở Wedding AI"
-      >
-        <FaRobot />
-      </button>
-
-      {open && (
-        <div className="chatbot-box">
-          <div className="chatbot-header">
-            <div className="chat-title">
-              <FaRobot />
-              <div>
-                <strong>Wedding AI</strong>
-                <span>Ngọc Thiện Wedding</span>
-              </div>
-            </div>
-            <button
-              type="button"
-              className={`chat-mode-btn ${humanMode ? "active" : ""}`}
-              onClick={async () => {
-                const nextMode = !humanMode;
-                setHumanMode(nextMode);
-
-                if (nextMode) {
-                  const session = chatSession || getOrCreateChatSession();
-                  setChatSession(session);
-                  await loadLiveMessages(session);
-                } else {
-                  setMessages([
-                    {
-                      from: "bot",
-                      text: "Tôi đã quay lại chế độ Wedding AI. Bạn muốn hỏi về báo giá, thực đơn, trang trí, dàn nhạc hay xe hoa?",
-                    },
-                  ]);
-                }
-              }}
-            >
-              {humanMode ? "AI tự động" : "Nhân viên"}
-            </button>
-          </div>
-
-          <div className="chatbot-messages" ref={chatRef}>
-            {messages.map((message, index) => (
-              <div key={message.id || index} className={message.from === "bot" ? "bot" : message.from === "admin" ? "admin" : "user"}>
-                <div className="text">{message.text}</div>
-
-                {message.products && (
-                  <div className="bubble-product-list">
-                    {message.products.map((product) => (
-                      <div
-                        key={product.id}
-                        className="bubble-product-card"
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => goToProductDetail(product.id)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            goToProductDetail(product.id);
-                          }
-                        }}
-                      >
-                        <img
-                          src={getImageUrl(getProductImage(product))}
-                          alt={product.name}
-                          onError={(e) => {
-                            e.target.src = "https://via.placeholder.com/150";
-                          }}
-                        />
-                        <div className="bubble-product-meta">
-                          <strong>{product.name}</strong>
-                          <span>{formatMoney(product.price)}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-
-            {typing && !humanMode && (
-              <div className="bot typing">
-                Wedding AI đang soạn câu trả lời...
-              </div>
-            )}
-          </div>
-
-          {!humanMode && (
-            <div className="chatbot-suggestions">
-              {QUICK_REPLIES.map((suggestion) => (
-                <button key={suggestion} onClick={() => sendMessage(suggestion)}>
-                  {suggestion}
-                </button>
-              ))}
-            </div>
-          )}
-
-          <div className="chatbot-input">
-            <input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKey}
-              placeholder={humanMode ? "Nhắn cho nhân viên..." : "Hỏi về dịch vụ cưới hỏi..."}
-            />
-
-            <button type="button" onClick={() => sendMessage()} aria-label="Gửi tin nhắn">
-              <FaPaperPlane />
-            </button>
-          </div>
+  return <div className={`nt-chat${open ? " is-open" : ""}${expanded ? " is-expanded" : ""}${navOpen ? " nav-open" : ""}${viewport.offset > 80 ? " has-keyboard" : ""}`} style={{ "--nt-chat-view-height": `${viewport.height}px`, "--nt-chat-view-top": `${viewport.top}px` }}>
+    {open && <section className="nt-chat-panel" id={panelId} role="dialog" tabIndex={-1} aria-modal="false" aria-labelledby={`${panelId}-title`}>
+      <aside className="nt-chat-sidebar" ref={sidebar} aria-label="Lịch sử trò chuyện" {...(!navOpen ? { inert: "" } : {})}>
+        <button className="nt-chat-nav-close" type="button" onClick={() => { setNavOpen(false); menuButton.current?.focus(); }} aria-label="Đóng lịch sử">×</button>
+        <Link className="nt-chat-wordmark" to="/" onClick={close}><BrandWordmark /><span>Wedding &amp; Events</span></Link>
+        <button className="nt-chat-new" type="button" onClick={clearAI} disabled={pending}><span aria-hidden="true">＋</span>Cuộc trò chuyện mới</button>
+        <div className="nt-chat-history-heading">Cuộc trò chuyện của bạn</div>
+        <nav className="nt-chat-history" aria-label="Các cuộc trò chuyện">{threads.map((thread) => {
+          const first = thread.messages.find((item) => item.role === "user");
+          const title = (first?.text || (thread.draft ? `Bản nháp: ${thread.draft}` : "Cuộc trò chuyện mới")).replace(/\s+/g, " ").slice(0, 80);
+          return <button key={thread.id} type="button" className={thread.id === activeId && mode === "ai" ? "is-active" : ""} aria-label={`Mở cuộc trò chuyện: ${title}`} aria-current={thread.id === activeId && mode === "ai" ? "true" : undefined} title={title} disabled={pending} onClick={() => openThread(thread)}><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M20 11a8 8 0 0 1-8 8H8l-4 3V11a8 8 0 1 1 16 0Z" /></svg><span>{title}</span></button>;
+        })}</nav>
+        <div className="nt-chat-sidebar-bottom"><p>Lịch sử lưu trong phiên trình duyệt này.</p><button type="button" onClick={() => switchMode("support")} disabled={pending}><AssistantIcon />Liên hệ nhân viên tư vấn</button><Link to="/" onClick={close}><span aria-hidden="true">←</span> Về trang chủ</Link></div>
+      </aside>
+      {navOpen && <button className="nt-chat-drawer-shade" type="button" tabIndex={-1} aria-label="Thu gọn lịch sử" onClick={() => { setNavOpen(false); menuButton.current?.focus(); }} />}
+      <div className="nt-chat-main" {...(navOpen ? { inert: "" } : {})}>
+      <header className="nt-chat-header">
+        <button ref={menuButton} className="nt-chat-menu" type="button" onClick={toggleNav} aria-label="Mở lịch sử trò chuyện" aria-expanded={navOpen}><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M4 6h16M4 12h16M4 18h16" /></svg></button>
+        <div className="nt-chat-brand"><h2 id={`${panelId}-title`}>Ngọc Thiện</h2><span>{mode === "support" ? "Hộp thư nhân viên tư vấn" : "Trợ lý tư vấn cưới hỏi"}</span></div>
+        <div className="nt-chat-tools"><button className="nt-chat-expand" type="button" onClick={() => setExpanded(!expanded)} aria-label={expanded ? "Thu gọn khung chat" : "Mở rộng khung chat"}><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M8 3H3v5m13 13h5v-5M3 3l6 6m12 12-6-6" /></svg></button><button type="button" onClick={close} aria-label="Đóng trợ lý"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="m6 6 12 12M18 6 6 18" /></svg></button></div>
+      </header>
+      <div className="nt-chat-subheader"><div className="nt-chat-mode-switch" role="group" aria-label="Chế độ trò chuyện"><button type="button" aria-pressed={mode === "ai"} onClick={() => switchMode("ai")} disabled={pending}>Trợ lý tư vấn</button><button type="button" aria-pressed={mode === "support"} onClick={() => switchMode("support")} disabled={pending}>Nhắn nhân viên</button></div><span className="nt-chat-source-label">{mode === "support" ? "Phản hồi khi nhân viên tiếp nhận" : capabilities === null ? "Đang kiểm tra kết nối…" : capabilities.unavailable ? "Chưa kiểm tra được kết nối" : capabilities.aiConfigured ? "Tư vấn bằng AI" : "Hướng dẫn cưới hỏi & danh mục"}</span></div>
+      {!online && <p className="nt-chat-notice" role="status">Bạn đang mất kết nối. Bản nháp vẫn được giữ lại.</p>}
+      {storageError && <p className="nt-chat-notice" role="status">Trình duyệt không lưu được lịch sử. Nội dung hiện chỉ được giữ khi trang đang mở.</p>}
+      <div className="nt-chat-log" ref={log} role="log" aria-label="Nội dung hội thoại" aria-live="polite" aria-relevant="additions" onScroll={() => { if (log.current) { autoScroll.current = log.current.scrollHeight - log.current.scrollTop - log.current.clientHeight < 80; if (autoScroll.current) setUnread(false); } }}>
+        <div className="nt-chat-transcript">
+        {mode === "support" && supportLoading && <p className="nt-chat-thinking" role="status">Đang tải cuộc trò chuyện…</p>}
+        {mode === "ai" && aiMessages.length === 1 && <div className="nt-chat-welcome"><span className="nt-chat-welcome-icon"><AssistantIcon /></span><h3>Cùng bạn chuẩn bị<br />ngày cưới trọn vẹn</h3><p>Bạn đang tìm dịch vụ hay cần lời khuyên?<br />Ngọc Thiện luôn sẵn lòng hỗ trợ.</p></div>}
+        {mode === "support" && supportMessages.length === 0 && <div className="nt-chat-support-intro"><h3>Trao đổi cùng Ngọc Thiện</h3><p>Để lại nội dung cần hỗ trợ. Khi nhân viên phản hồi, tin nhắn sẽ xuất hiện trong cuộc trò chuyện này.</p><p>Gửi tin nhắn chưa xác nhận đơn đặt tiệc hoặc lịch phục vụ.</p></div>}
+        {messages.filter((message) => message.id !== "welcome").map((message) => {
+          const itemFailure = message.failure || (failure?.mode === "ai" && failure.userId === message.id ? failure : null);
+          return <ChatMessage key={message.id} message={message} onSupport={() => switchMode("support")} onNavigate={close} onAsk={mode === "ai" ? send : undefined} pending={pending} failure={itemFailure} onRetry={() => itemFailure && ask(itemFailure.text, itemFailure.history, false, itemFailure.userId)} />;
+        })}
+        {mode === "ai" && aiMessages.length === 1 && <div className="nt-chat-suggestions">{suggestions.map((text) => <button key={text} type="button" onClick={() => send(text)} disabled={pending}>{text}<span aria-hidden="true">↗</span></button>)}</div>}
+        {pending && mode === "ai" && <div className="nt-chat-thinking" role="status"><span aria-hidden="true"><i /><i /><i /></span>Ngọc Thiện đang trả lời…</div>}
         </div>
-      )}
-    </div>
-  );
-};
+      </div>
+      {unread && <button className="nt-chat-latest" type="button" onClick={toLatest}>Tin nhắn mới <span aria-hidden="true">↓</span></button>}
+      <div className="nt-chat-compose-area">
+      {(mode === "support" ? supportError : notice) && <p className="nt-chat-notice" role="status">{mode === "support" ? supportError : notice}</p>}
+      {failure?.mode === "support" && mode === "support" && <div className="nt-chat-error" role="alert"><p>{failure.message}</p><button type="button" onClick={retry} disabled={pending}>Thử lại</button></div>}
+      {feedback && <p className="nt-chat-feedback" role="status">{feedback}</p>}
+      <form className="nt-chat-composer" onSubmit={(event) => { event.preventDefault(); send(); }}>
+        <label className="nt-chat-sr" htmlFor={`${panelId}-input`}>{mode === "support" ? "Tin nhắn cho nhân viên" : "Câu hỏi cho trợ lý"}</label>
+        <textarea ref={composer} id={`${panelId}-input`} value={input} rows={1} maxLength={mode === "support" ? 2000 : 4000} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (!mobile && event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); send(); } }} placeholder={mode === "support" ? "Nhắn điều bạn cần hỗ trợ…" : "Nhập câu hỏi về dịch vụ cưới hỏi…"} />
+        {pending && mode === "ai" ? <button key="stop" className="nt-chat-send" type="button" onClick={(event) => { event.preventDefault(); request.current?.abort(); }} aria-label="Dừng câu trả lời"><svg aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2" /></svg></button> : <button key="send" className="nt-chat-send" type="submit" disabled={pending || !input.trim()} aria-label="Gửi tin nhắn"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12 7-7 7 7M12 5v14" /></svg></button>}
+      </form>
+      <div className="nt-chat-composer-hint"><span>{mode === "support" ? "Hộp thư hỗ trợ khách hàng" : mobile ? "Xuống dòng bằng bàn phím, chạm mũi tên để gửi" : "Enter để gửi · Shift + Enter để xuống dòng"}</span><span>{input.length}/{mode === "support" ? 2000 : 4000}</span></div>
+      <p className="nt-chat-disclaimer">Thông tin tư vấn mang tính tham khảo. Giá và lịch phục vụ cần được Ngọc Thiện xác nhận.</p>
+      </div></div>
+    </section>}
+    <button ref={launcher} type="button" className="nt-chat-launcher" onClick={() => setOpen(!open)} aria-label={open ? "Thu gọn trợ lý Ngọc Thiện" : "Mở trợ lý Ngọc Thiện"} aria-expanded={open} aria-controls={open ? panelId : undefined}><AssistantIcon /><span>Hỏi Ngọc Thiện</span></button>
+  </div>;
+}
 
-export default ChatBot;
+export default function ChatBot() {
+  const { pathname } = useLocation();
+  const scope = getAuthItem("user_id") ? `user_${getAuthItem("user_id")}` : "guest";
+  return <WeddingAssistant key={scope} scope={scope} pathname={pathname} />;
+}

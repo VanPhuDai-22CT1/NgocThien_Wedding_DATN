@@ -9,8 +9,13 @@ router.get('/sessions', authMiddleware, adminMiddleware, (req, res) =>
 );
 router.get('/messages', (req, res) => ChatController.getLiveChatMessages(req, res));
 
-router.post('/message', (req, res) => ChatController.saveLiveChatMessage(req, res));
-router.put('/read', authMiddleware, (req, res) => ChatController.markLiveChatRead(req, res));
+router.post('/message', (req, res, next) => {
+  if (req.body?.sender_type === 'admin') {
+    return authMiddleware(req, res, () => adminMiddleware(req, res, next));
+  }
+  next();
+}, (req, res) => ChatController.saveLiveChatMessage(req, res));
+router.put('/read', authMiddleware, adminMiddleware, (req, res) => ChatController.markLiveChatRead(req, res));
 router.put('/:chat_session/close', authMiddleware, adminMiddleware, (req, res) =>
   ChatController.closeChat(req, res)
 );

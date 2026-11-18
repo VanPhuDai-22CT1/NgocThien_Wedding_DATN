@@ -1,4 +1,3 @@
-import axios from "axios";
 import { apiClient, buildAuthHeaders } from "utils/apiClient";
 
 const GUEST_CART_KEY = "guest_cart_items";
@@ -11,11 +10,13 @@ const normalizeItem = (item = {}) => {
 
   return {
     productId,
-    id: productId,
+    id: item.id || `guest-${window.crypto.randomUUID()}`,
     name: item.name || "Sản phẩm",
     price: Number(item.price || 0),
     quantity,
     cover: item.cover || "",
+    unit: item.unit || "",
+    selection: item.selection || {},
   };
 };
 
@@ -47,7 +48,7 @@ export const addGuestCartItem = (item, quantity = 1) => {
   }
 
   const existedIndex = cart.findIndex(
-    (cartItem) => Number(cartItem.productId) === Number(normalizedItem.productId)
+    (cartItem) => Number(cartItem.productId) === Number(normalizedItem.productId) && JSON.stringify(cartItem.selection) === JSON.stringify(normalizedItem.selection)
   );
 
   if (existedIndex >= 0) {
@@ -59,13 +60,14 @@ export const addGuestCartItem = (item, quantity = 1) => {
     cart.push(normalizedItem);
   }
 
+  if (cart.some((entry) => entry.quantity > 999)) throw new Error("Số lượng tối đa là 999.");
   saveGuestCart(cart);
   return cart;
 };
 
-export const removeGuestCartItem = (productId) => {
+export const removeGuestCartItem = (id) => {
   const nextCart = getGuestCart().filter(
-    (item) => Number(item.productId) !== Number(productId)
+    (item) => String(item.id) !== String(id)
   );
   saveGuestCart(nextCart);
   return nextCart;
@@ -84,7 +86,7 @@ export const mergeGuestCartToServer = async (userId) => {
     return;
   }
 
-  await Promise.all(
+  const results = await Promise.allSettled(
     cart.map((item) =>
       apiClient.post(
         "/cart",
@@ -92,11 +94,17 @@ export const mergeGuestCartToServer = async (userId) => {
           userid: normalizedUserId,
           productId: Number(item.productId),
           quantity: Number(item.quantity || 1),
+          selection: item.selection,
         },
         { headers: buildAuthHeaders() }
       )
     )
   );
 
+  const failedItems = cart.filter((_item, index) => results[index].status === "rejected");
+  if (failedItems.length > 0) {
+    saveGuestCart(failedItems);
+    throw new Error("Một số dịch vụ chưa được chuyển vào giỏ hàng tài khoản.");
+  }
   clearGuestCart();
 };

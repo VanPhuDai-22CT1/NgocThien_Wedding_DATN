@@ -8,6 +8,7 @@ import reviewRoutes from './reviewRoutes';
 import chatRoutes from './chatRoutes';
 import legacyRoutes from './legacyRoutes';
 import homepageConfigRoutes from './homepageConfigRoutes';
+import assistantRoutes from './assistantRoutes';
 
 const router = Router();
 
@@ -20,5 +21,6 @@ router.use('/reviews', reviewRoutes);
 router.use('/chat', chatRoutes);
 router.use('/legacy', legacyRoutes);
 router.use('/homepage-config', homepageConfigRoutes);
+router.use('/assistant', assistantRoutes);
 
 export default router;

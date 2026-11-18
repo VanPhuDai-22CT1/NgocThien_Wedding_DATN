@@ -11,6 +11,8 @@ router.get('/booked-dates', (req, res) =>
   ConsultationController.getBookedEventDates(req, res)
 );
 
+router.post('/quote', (req, res, next) => req.headers.authorization ? authMiddleware(req, res, next) : next(), (req, res) => ConsultationController.createQuote(req, res));
+
 router.post('/', (req, res) => ConsultationController.createConsultation(req, res));
 router.put('/:id/status', authMiddleware, adminMiddleware, (req, res) =>
   ConsultationController.updateConsultationStatus(req, res)

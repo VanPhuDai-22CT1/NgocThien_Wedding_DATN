@@ -1,27 +1,13 @@
-import React, { useState, useEffect } from "react";
+import useAdminTheme from "component/AdminShell/useAdminTheme";
+
+import { useState, useEffect } from "react";
 import "./style.scss";
-import { NavLink, useNavigate } from "react-router-dom";
-import axios from "axios";
+import { useNavigate } from "react-router-dom";
+
 import { apiClient, buildAuthHeaders } from "utils/apiClient";
-import { getAuthItem, logoutAuthSession } from "utils/authStorage";
-import { getDarkMode, setDarkModeStorage } from "utils/darkMode";
-import {
-  FaUsers,
-  FaBox,
-  FaShoppingCart,
-  FaCreditCard,
-  FaChartBar,
-  FaChartPie,
-  FaDownload,
-  FaMoon,
-  FaSun,
-  FaSignOutAlt,
-  FaHistory,
-  FaBell,
-  FaComments,
-  FaImage,
-  FaRegCalendarAlt
-} from "react-icons/fa";
+import { getAuthItem } from "utils/authStorage";
+
+import { FaCreditCard, FaChartBar, FaChartPie, FaDownload } from "react-icons/fa";
 import { Bar, Pie } from "react-chartjs-2";
 import {
   Chart as ChartJS,
@@ -47,8 +33,8 @@ const API = `${process.env.REACT_APP_API_URL || "/api"}/legacy`;
 
 const Statistics = () => {
   const navigate = useNavigate();
-  const [darkMode, setDarkMode] = useState(() => getDarkMode());
-  const [username, setUsername] = useState("");
+  const [darkMode] = useAdminTheme();
+  const [, setUsername] = useState("");
   const [stats, setStats] = useState({
     total_users: 0,
     total_products: 0,
@@ -84,9 +70,7 @@ const Statistics = () => {
     fetchStats();
   }, [navigate]);
 
-  useEffect(() => {
-    setDarkModeStorage(darkMode);
-  }, [darkMode]);
+
 
   const fetchStats = async () => {
     try {
@@ -226,98 +210,17 @@ const Statistics = () => {
     }
   };
 
-  const logout = () => {
-    logoutAuthSession("/");
-  };
+
 
   return (
     <div className={`statistics-page dashboard-layout ${darkMode ? "dark-mode" : ""}`}>
-      <aside className="sidebar">
-        <div className="logo">
-          <span className="logo-title">NGỌC THIỆN</span>
-          <span className="logo-title">ADMIN</span>
-          <span className="logo-subtitle">WEDDING</span>
-        </div>
 
-        <ul>
-          <li>
-            <NavLink to="/dashboard">
-              <FaChartPie /> Tổng quan
-            </NavLink>
-          </li>
-
-          <li>
-            <NavLink to="/qlnguoidung">
-              <FaUsers /> Người dùng
-            </NavLink>
-          </li>
-
-          <li>
-            <NavLink to="/qlsanpham">
-              <FaBox /> Dịch vụ
-            </NavLink>
-          </li>
-
-          <li>
-            <NavLink to="/qlhinhanh">
-              <FaImage /> Ảnh trang chủ
-            </NavLink>
-          </li>
-
-          <li>
-            <NavLink to="/qldonhang">
-              <FaShoppingCart /> Đơn hàng
-            </NavLink>
-          </li>
-
-          <li>
-            <NavLink to="/qltinnhan">
-              <FaComments /> Tin nhắn
-            </NavLink>
-          </li>
-
-          <li>
-            <NavLink to="/notification">
-              <FaBell /> Lịch tư vấn
-            </NavLink>
-          </li>
-
-          <li>
-            <NavLink to="/lichlamviec">
-              <FaRegCalendarAlt /> Lịch làm việc
-            </NavLink>
-          </li>
-
-          <li>
-            <NavLink to="/qlhoatdong">
-              <FaHistory /> Lịch sử hoạt động
-            </NavLink>
-          </li>
-
-        </ul>
-      </aside>
 
       <div className="main-content">
         <header className="topbar">
-          <h2 className="topbar-title">Thống kê & Xuất dữ liệu</h2>
+          <h1 className="topbar-title">Thống kê & Xuất dữ liệu</h1>
 
-          <div className="top-actions">
-            <button
-              className="dark-toggle"
-              onClick={() => setDarkMode(!darkMode)}
-              title="Chuyển đổi chế độ tối"
-            >
-              {darkMode ? <FaSun /> : <FaMoon />}
-            </button>
 
-            <span className="username">
-              Xin chào <b>{username}</b>
-            </span>
-
-            <button className="logout-btn" onClick={logout} title="Đăng xuất">
-              <FaSignOutAlt />
-            </button>
-          </div>
         </header>
 
         <main className="statistics-content">

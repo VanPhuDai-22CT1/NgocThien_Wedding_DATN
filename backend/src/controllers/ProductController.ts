@@ -2,12 +2,17 @@ import { Response } from 'express';
 import { Product, ProductReview } from '../models';
 import { Op } from 'sequelize';
 import { AuthRequest } from '../middleware/auth';
+import { pagination } from '../utils/pagination';
 
 class ProductController {
   async getProducts(req: AuthRequest, res: Response) {
+    let paging;
+    try { paging = pagination(req.query); } catch (error: any) {
+      return res.status(400).json({ success: false, message: error.message });
+    }
     try {
-      const { page = 1, limit = 20, category_id, search } = req.query;
-      const offset = ((page as unknown as number) - 1) * (limit as unknown as number);
+      const { category_id, search } = req.query;
+      const { page, limit, offset } = paging;
 
       const where: any = {};
       if (category_id) {

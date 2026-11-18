@@ -1,3 +1,6 @@
+
+@layer nt-admin-legacy {
+:where(.nt-admin-body) {
 $bg: #f4f6fb;
 $text: #222;
 $text-light: #666;
@@ -563,8 +566,8 @@ $primary: #b71c1c;
           padding: 8px 0 0;
 
           canvas {
-            max-width: 320px !important;
-            max-height: 320px !important;
+            max-width: 320px;
+            max-height: 320px;
             margin: 0 auto;
           }
         }
@@ -893,4 +896,7 @@ $primary: #b71c1c;
       }
     }
   }
+}
+
+}
 }

@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useState, useRef } from "react";
-import axios from "axios";
 import { useLocation, useNavigate } from "react-router-dom";
 import { ROUTERS } from "utils/router";
 import { getAuthItem, setAuthItem } from "utils/authStorage";
@@ -7,7 +6,6 @@ import { apiClient, buildAuthHeaders } from "utils/apiClient";
 import { getImageUrl } from "utils/image";
 import "./style.scss";
 
-const API_URL = "/api/legacy";
 const MAX_AVATAR_SIZE = 2 * 1024 * 1024;
 
 const normalizeAvatarUrl = (avatarPath = "") => {
@@ -77,7 +75,7 @@ const UserInfo = () => {
       }
 
       if ((!res?.data?.success || !res?.data?.data) && storedUserId) {
-        res = await axios.get(API_URL, {
+        res = await apiClient.get("/legacy", {
           params: {
             action: "getUser",
             user_id: storedUserId,
@@ -200,7 +198,7 @@ const UserInfo = () => {
 
     try {
       setSaving(true);
-      const res = await axios.post(API_URL, formData, {
+      const res = await apiClient.post("/legacy", formData, {
         withCredentials: true,
         headers: { "Content-Type": "multipart/form-data", ...buildAuthHeaders() },
       })

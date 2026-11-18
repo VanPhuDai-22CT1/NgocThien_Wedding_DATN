@@ -1,3 +1,6 @@
+
+@layer nt-admin-legacy {
+:where(.nt-admin-body) {
 .home-image-admin-layout {
   display: flex;
   height: 100vh;
@@ -363,4 +366,7 @@
       grid-template-columns: 1fr;
     }
   }
+}
+
+}
 }

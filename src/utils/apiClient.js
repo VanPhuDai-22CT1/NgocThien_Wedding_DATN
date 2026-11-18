@@ -1,16 +1,8 @@
 import axios from "axios";
 import { getAuthItem } from "utils/authStorage";
 
-const normalizeApiBaseUrl = (rawUrl) => {
-  const isLocalBrowser =
-    typeof window !== "undefined" &&
-    ["localhost", "127.0.0.1"].includes(window.location.hostname);
-
-  if (isLocalBrowser) {
-    return "http://localhost:5000/api";
-  }
-
-  const fallback = "http://localhost:5000/api";
+export const normalizeApiBaseUrl = (rawUrl) => {
+  const fallback = "/api";
   const value = String(rawUrl || "").trim();
 
   if (!value) return fallback;
@@ -27,6 +19,7 @@ export const API_BASE_URL = normalizeApiBaseUrl(process.env.REACT_APP_API_URL);
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
+  timeout: 15000,
   headers: {
     "Content-Type": "application/json",
   },

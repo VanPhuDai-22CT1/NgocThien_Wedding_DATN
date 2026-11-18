@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { ShoppingCart, Product } from '../models';
 import { AuthRequest } from '../middleware/auth';
+import { resolveSelection } from '../utils/productSelection';
 
 class CartController {
   private parsePositiveInt(value: unknown): number | null {
@@ -37,13 +38,19 @@ class CartController {
 
       const items = cartItems.map((item) => {
         const product = (item as any).Product;
+        let price = Number(product?.price || 0);
+        let unit = '';
+        try { const resolved = resolveSelection(product, item.selection || {}, false); price = resolved.price; unit = resolved.unit; } catch { price = 0; }
         return {
           id: item.id,
           productId: item.product_id,
           name: product?.name,
-          price: product?.price,
+          price,
+          unit,
+          selection: item.selection || {},
           quantity: item.quantity,
-          subtotal: (product?.price || 0) * item.quantity,
+          cover: product?.cover || '',
+          subtotal: price * item.quantity,
         };
       });
 
@@ -73,24 +80,32 @@ class CartController {
 
       const parsedProductId = this.parsePositiveInt(productId);
       const parsedQuantity = this.parsePositiveInt(quantity);
-      if (!parsedProductId || !parsedQuantity) {
+      if (!parsedProductId || !parsedQuantity || parsedQuantity > 999) {
         return res.status(400).json({
           success: false,
           message: 'Invalid productId or quantity',
         });
       }
 
-      let cartItem = await ShoppingCart.findOne({
-        where: { user_id: userId, product_id: parsedProductId },
-      });
+      const product = await Product.findByPk(parsedProductId);
+      if (!product) {
+        return res.status(404).json({ success: false, message: 'Product not found' });
+      }
+
+      let resolved;
+      try { resolved = resolveSelection(product, req.body.selection); } catch (error: any) { return res.status(400).json({ success: false, message: error.message }); }
+      let cartItem = await ShoppingCart.findOne({ where: { user_id: userId, product_id: parsedProductId, selection_key: resolved.key } });
 
       if (cartItem) {
+        if (cartItem.quantity + parsedQuantity > 999) return res.status(400).json({ success: false, message: 'Số lượng tối đa là 999.' });
         await cartItem.update({ quantity: cartItem.quantity + parsedQuantity });
       } else {
         cartItem = await ShoppingCart.create({
           user_id: userId,
           product_id: parsedProductId,
           quantity: parsedQuantity,
+          selection: resolved.selection,
+          selection_key: resolved.key,
         });
       }
 
@@ -162,7 +177,7 @@ class CartController {
       }
 
       const parsedQuantity = Number(quantity);
-      if (!Number.isFinite(parsedQuantity)) {
+      if (!Number.isSafeInteger(parsedQuantity) || parsedQuantity < 0 || parsedQuantity > 999) {
         return res.status(400).json({
           success: false,
           message: 'Invalid quantity',

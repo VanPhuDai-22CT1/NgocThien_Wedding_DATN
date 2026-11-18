@@ -1,0 +1,43 @@
+.brand-wordmark {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  vertical-align: middle;
+  color: inherit;
+
+  .brand-wordmark__name {
+    display: block;
+    font-family: "Playfair Display", Georgia, serif;
+    font-size: 30px;
+    font-weight: 700;
+    -webkit-text-stroke: .35px currentColor;
+    line-height: 1.5;
+    letter-spacing: .045em;
+    white-space: nowrap;
+    text-transform: uppercase;
+    text-shadow: none;
+  }
+
+  .brand-wordmark__caption {
+    display: block;
+    margin-top: 5px;
+    font-family: "Be Vietnam Pro", "Segoe UI", sans-serif;
+    font-size: 10px;
+    font-weight: 400;
+    line-height: 1.6;
+    letter-spacing: .08em;
+    text-transform: none;
+    opacity: .8;
+  }
+
+  &.brand-wordmark--admin .brand-wordmark__name { font-size: 22px; }
+}
+
+.sidebar .logo.brand-logo {
+  color: #fff;
+  &::after { display: none; }
+}
+
+@media (max-width: 600px) {
+  .brand-wordmark .brand-wordmark__name { font-size: 26px; }
+}

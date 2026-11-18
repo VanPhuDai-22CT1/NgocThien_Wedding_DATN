@@ -1,30 +1,16 @@
-import React, { useState, useEffect, useMemo } from "react";
-import "./style.scss";
-import { NavLink, useNavigate } from "react-router-dom";
-import { apiClient, buildAuthHeaders } from "utils/apiClient";
-import { toast } from "react-toastify";
-import { getAuthItem, logoutAuthSession } from "utils/authStorage";
-import { getDarkMode, setDarkModeStorage } from "utils/darkMode";
+import useAdminTheme from "component/AdminShell/useAdminTheme";
 
-import {
-  FaUsers,
-  FaBox,
-  FaShoppingCart,
-  FaChartPie,
-  FaCreditCard,
-  FaDownload,
-  FaMoon,
-  FaSun,
-  FaSignOutAlt,
-  FaHistory,
-  FaBell,
-  FaComments,
-  FaImage,
-  FaRobot,
-  FaChevronLeft,
-  FaChevronRight,
-  FaRegCalendarAlt
-} from "react-icons/fa";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import "./style.scss";
+import "./overview.scss";
+import { Link, useNavigate } from "react-router-dom";
+import { FiArrowUpRight, FiCalendar, FiChevronDown, FiMessageSquare, FiPackage, FiPhone, FiMapPin, FiRefreshCw, FiShoppingBag } from "react-icons/fi";
+import { apiClient, buildAuthHeaders } from "utils/apiClient";
+import { getAuthItem } from "utils/authStorage";
+import { fetchDashboardStats, dashboardStatsError } from "utils/dashboardStats";
+
+
+import { FaUsers, FaBox, FaShoppingCart, FaChartPie, FaCreditCard, FaDownload, FaBell, FaRobot, FaChevronLeft, FaChevronRight, FaRegCalendarAlt } from "react-icons/fa";
 
 import {
   Chart as ChartJS,
@@ -36,7 +22,7 @@ import {
   Legend
 } from "chart.js";
 
-import { Bar, Pie } from "react-chartjs-2";
+import { Bar, Doughnut } from "react-chartjs-2";
 import { notify } from "utils/notify";
 
 ChartJS.register(
@@ -60,6 +46,7 @@ const Dashboard = () => {
     total_users: 0,
     total_products: 0,
     total_orders: 0,
+    total_consultations: 0,
     total_revenue: 0,
     completed_orders: 0,
     pending_orders: 0,
@@ -67,15 +54,67 @@ const Dashboard = () => {
     months: [],
     monthly_revenue: []
   });
+  const [statsLoaded, setStatsLoaded] = useState(false);
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [statsError, setStatsError] = useState("");
+  const [statsAuthExpired, setStatsAuthExpired] = useState(false);
+  const [statsUpdatedAt, setStatsUpdatedAt] = useState(null);
+  const statsRequest = useRef(null);
+
+  const loadDashboard = useCallback(async () => {
+    if (statsRequest.current) return;
+    const controller = new AbortController();
+    statsRequest.current = controller;
+    setStatsLoading(true);
+    try {
+      const data = await fetchDashboardStats(apiClient, {
+        headers: buildAuthHeaders(), signal: controller.signal,
+      });
+      setStats(data);
+      setStatsLoaded(true);
+      setStatsError("");
+      setStatsAuthExpired(false);
+      setStatsUpdatedAt(new Date());
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        setStatsError(dashboardStatsError(error));
+        setStatsAuthExpired(error?.response?.status === 401);
+      }
+    } finally {
+      if (statsRequest.current === controller) {
+        statsRequest.current = null;
+        if (!controller.signal.aborted) setStatsLoading(false);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    const refresh = () => { if (document.visibilityState === "visible") loadDashboard(); };
+    const timer = window.setInterval(refresh, 60000);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+      statsRequest.current?.abort();
+      statsRequest.current = null;
+    };
+  }, [loadDashboard]);
 
   const [consultations, setConsultations] = useState([]);
+  const [upcomingEvents, setUpcomingEvents] = useState([]);
+  const [consultationsLoading, setConsultationsLoading] = useState(true);
+  const [consultationsError, setConsultationsError] = useState("");
+  const [exporting, setExporting] = useState(false);
   const [aiSuggestions, setAiSuggestions] = useState([]);
   const [aiLoading, setAiLoading] = useState(false);
 
-  const [darkMode, setDarkMode] = useState(() => getDarkMode());
+  const [darkMode] = useAdminTheme();
   const [selectedExportType, setSelectedExportType] = useState("day");
-  const [role, setRole] = useState("");
-  const [username, setUsername] = useState("");
+  const [revenueRange, setRevenueRange] = useState(12);
+  const [, setRole] = useState("");
+  const [, setUsername] = useState("");
   const [currentMonth, setCurrentMonth] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
@@ -171,9 +210,7 @@ const Dashboard = () => {
     setSelectedDateKey(firstDayKey);
   }, [currentMonth, normalizedConsultations]);
 
-  useEffect(() => {
-    setDarkModeStorage(darkMode);
-  }, [darkMode]);
+
 
   /* ================= LOAD USER ================= */
 
@@ -195,32 +232,9 @@ const Dashboard = () => {
     loadAiSuggestions();
     loadUpcomingEvents();
 
-  }, [navigate]);
+  }, [navigate, loadDashboard]);
 
   /* ================= LOAD DASHBOARD ================= */
-
-  const loadDashboard = async () => {
-
-    try {
-
-      const res = await apiClient.get(
-        "/legacy",
-        { params: { action: "getDashboardStats" }, headers: buildAuthHeaders() }
-      );
-
-      const data = res?.data;
-      if (data && data.success !== false) {
-        setStats(data);
-      }
-
-    } catch (error){
-      console.log("Dashboard error:",error);
-      const serverMessage = error?.response?.data?.message || error?.message;
-      // optionally show a toast or console; for now log
-      console.warn('Dashboard load failed:', serverMessage);
-    }
-
-  };
 
   const loadAiSuggestions = async () => {
     try {
@@ -247,59 +261,30 @@ const Dashboard = () => {
   const loadConsultations = async () => {
 
     try {
+      setConsultationsLoading(true);
 
       const res = await apiClient.get(`/legacy?action=getConsultations`, { headers: buildAuthHeaders() });
       const data = res?.data;
-      if (data?.success) {
-        setConsultations(data.data || []);
-      }
+      if (!data?.success || !Array.isArray(data.data)) throw new Error("Invalid consultation response");
+      setConsultations(data.data);
+      setConsultationsError("");
 
     } catch(error){
-      console.log("Consult error:",error);
+      setConsultationsError("Không thể tải lịch tư vấn. Vui lòng thử lại.");
+    } finally {
+      setConsultationsLoading(false);
     }
 
   };
 
   /* ================= LOAD UPCOMING EVENTS ================= */
 
-  const loadUpcomingEvents = async () => {
-    try {
-      const res = await apiClient.get(`/legacy?action=getUpcomingEvents`, { headers: buildAuthHeaders() });
-      const data = res?.data;
-
-      if (data?.success && Array.isArray(data.data)) {
-        const upcomingEvents = data.data;
-        
-        // Show toast notification for each upcoming event
-        upcomingEvents.forEach((event) => {
-          const eventDate = new Date(event.event_date);
-          const formattedDate = eventDate.toLocaleDateString("vi-VN", {
-            weekday: "long",
-            day: "2-digit",
-            month: "2-digit",
-            year: "numeric"
-          });
-          
-          toast.warning(
-            `📍 Sự kiện sắp tới: ${event.name || event.service}\nNgày: ${formattedDate}`,
-            {
-              position: "top-right",
-              autoClose: 8000,
-              hideProgressBar: false,
-              closeOnClick: true,
-              pauseOnHover: true,
-              draggable: true,
-            }
-          );
-        });
-      }
-    } catch (error) {
-      console.log("Upcoming events error:", error);
-    }
-  };
+  const loadUpcomingEvents = async () => {try {const response = await apiClient.get('/legacy?action=getUpcomingEvents', {headers:buildAuthHeaders()});if(response.data?.success && Array.isArray(response.data.data))setUpcomingEvents(response.data.data);} catch {setUpcomingEvents([]);}};
 
   const exportStatistics = async (type) => {
+    if (exporting) return;
     try {
+      setExporting(true);
       const res = await apiClient.get(`/legacy`, {
         params: { action: 'exportStatistics', type },
         responseType: 'blob',
@@ -321,35 +306,43 @@ const Dashboard = () => {
     } catch (error) {
       console.error('Export error:', error);
       notify.info('Không thể xuất dữ liệu thống kê');
+    } finally {
+      setExporting(false);
     }
   };
 
   /* ================= LOGOUT ================= */
 
-  const logout = () => {
 
-    logoutAuthSession("/");
-
-  };
 
   /* ================= MONEY ================= */
 
   const formatMoney = (money) => {
     return new Intl.NumberFormat("vi-VN").format(money || 0) + " đ";
   };
+  const formatCount = (value) => statsLoaded ? new Intl.NumberFormat("vi-VN").format(value) : "—";
 
   /* ================= BAR CHART ================= */
 
+  const revenueMonths = (stats.months || []).slice(-revenueRange);
+  const revenueValues = (stats.monthly_revenue || []).slice(-revenueRange).map(value => Number(value) || 0);
+  const periodRevenue = revenueValues.reduce((sum, value) => sum + value, 0);
+  const averageRevenue = revenueValues.length ? periodRevenue / revenueValues.length : 0;
+  const formatPercent = value => `${new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 1 }).format(value)}%`;
   const barData = {
 
-    labels: stats.months,
+    labels: revenueMonths,
 
     datasets:[
       {
-        label:"Doanh thu năm nay",
-        data: stats.monthly_revenue,
-        backgroundColor:"#c2185b",
-        borderRadius:8
+        label:"Doanh thu",
+        data: revenueValues,
+        backgroundColor: darkMode ? "#ca8197" : "#8c2038",
+        hoverBackgroundColor: darkMode ? "#e3a5b8" : "#6c172c",
+        borderRadius: 5,
+        maxBarThickness: 34,
+        categoryPercentage: .7,
+        barPercentage: .65
       }
     ]
 
@@ -359,7 +352,7 @@ const Dashboard = () => {
 
   const pieData = {
 
-    labels:["Đã giao sự kiện","Đang xử lý/Đang giao","Hủy đơn"],
+    labels:["Hoàn tất","Đang xử lý","Đã hủy"],
 
     datasets:[
       {
@@ -368,94 +361,33 @@ const Dashboard = () => {
           stats.pending_orders,
           stats.cancelled_orders
         ],
-        backgroundColor:[
-          "#4caf50",
-          "#ff9800",
-          "#f44336"
-        ]
+        backgroundColor: darkMode
+          ? ["#65b48c", "#df8ba5", "#d8aa61"]
+          : ["#246b50", "#8c2038", "#a86f22"]
       }
     ]
 
   };
+
+  const chartPlugins = { legend: { labels: { color: darkMode ? "#cbb7a5" : "#8b7766", boxWidth: 12, padding: 14, font: { family: "Be Vietnam Pro", size: 11 } } } };
+  const chartScales = {
+    x: { border: { display: false }, ticks: { color: darkMode ? "#bfb0b9" : "#827780", maxRotation: 0, autoSkip: true, font: { family: "Be Vietnam Pro", size: 10 }, callback: index => String(revenueMonths[index] || "").replace(/\/(\d{2})(\d{2})$/, "/$2") }, grid: { display: false } },
+    y: { beginAtZero: true, border: { display: false }, ticks: { maxTicksLimit: 5, padding: 10, color: darkMode ? "#bfb0b9" : "#827780", font: { family: "Be Vietnam Pro", size: 10 }, callback: value => new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 1 }).format(value / 1000000) }, grid: { color: darkMode ? "#3b323c" : "#eee9ed", drawTicks: false } },
+  };
+  const chartTooltip = { backgroundColor: darkMode ? "#f4eaf0" : "#431c29", titleColor: darkMode ? "#431c29" : "#fff", bodyColor: darkMode ? "#431c29" : "#fff", padding: 12, cornerRadius: 7, displayColors: false, titleFont: { family: "Be Vietnam Pro", size: 11, weight: "500" }, bodyFont: { family: "Be Vietnam Pro", size: 12 }, callbacks: { label: context => formatMoney(context.parsed.y) } };
+  const chartMotion = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches ? false : { duration: 350 };
+  const vietnamToday = new Intl.DateTimeFormat("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", weekday: "long", day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date());
 
   /* ================= RENDER ================= */
 
   return (
 
     <>
-      <div className={`dashboard-layout ${darkMode ? "dark":""}`}>
+      <div className={`dashboard-layout nt-overview ${darkMode ? "dark":""}`}>
 
       {/* SIDEBAR */}
 
-      <aside className="sidebar">
 
-        <div className="logo">
-          <span className="logo-title">NGỌC THIỆN</span>
-          <span className="logo-title">ADMIN</span>
-          <span className="logo-subtitle">WEDDING</span>
-        </div>
-
-        <ul>
-
-          <li>
-            <NavLink to="/dashboard">
-              <FaChartPie/> Tổng quan
-            </NavLink>
-          </li>
-
-          {role==="admin" && (
-            <li>
-              <NavLink to="/qlnguoidung">
-                <FaUsers/> Người dùng
-              </NavLink>
-            </li>
-          )}
-
-          <li>
-            <NavLink to="/qlsanpham">
-              <FaBox/> Dịch vụ
-            </NavLink>
-          </li>
-
-          <li>
-            <NavLink to="/qlhinhanh">
-              <FaImage/> Ảnh trang chủ
-            </NavLink>
-          </li>
-
-          <li>
-            <NavLink to="/qldonhang">
-              <FaShoppingCart/> Đơn hàng
-            </NavLink>
-          </li>
-
-          <li>
-            <NavLink to="/qltinnhan">
-              <FaComments/> Tin nhắn
-            </NavLink>
-          </li>
-
-          <li>
-            <NavLink to="/notification">
-              <FaBell/> Lịch tư vấn
-            </NavLink>
-          </li>
-
-          <li>
-            <NavLink to="/lichlamviec">
-              <FaRegCalendarAlt/> Lịch làm việc
-            </NavLink>
-          </li>
-
-          <li>
-            <NavLink to="/qlhoatdong">
-              <FaHistory/> Lịch sử hoạt động
-            </NavLink>
-          </li>
-
-        </ul>
-
-      </aside>
 
       {/* MAIN */}
 
@@ -465,35 +397,31 @@ const Dashboard = () => {
 
         <header className="topbar">
           <div className="topbar-title-group">
-            <span className="topbar-kicker">Admin Control Center</span>
-            <h2>Bảng điều khiển</h2>
-            <p className="topbar-subtitle">Tổng quan vận hành, lịch hẹn, doanh thu và các tác vụ quản trị quan trọng.</p>
+
+            <h1>Bảng điều khiển</h1>
+            <p className="topbar-subtitle">Tổng quan kinh doanh và lịch tư vấn của Ngọc Thiện Wedding.</p>
           </div>
 
-          <div className="top-actions">
 
-            <button
-              className="dark-toggle"
-              onClick={()=>setDarkMode(!darkMode)}
-            >
-              {darkMode ? <FaSun/> : <FaMoon/>}
-            </button>
 
-            <span className="username">
-              Xin chào <b>{role === "admin" ? "Admin" : (username || "bạn")}</b>
-            </span>
-
-            <button onClick={logout}>
-              <FaSignOutAlt/>
-            </button>
-
-          </div>
-
+          <div className="nt-overview-date"><FiCalendar aria-hidden="true" /><span>{vietnamToday}</span></div>
         </header>
+
+        <div className="nt-admin-stats-update">
+          <span role="status" aria-live="polite">
+            {statsLoading ? "Đang cập nhật số liệu…" : statsUpdatedAt ? `Cập nhật lúc ${statsUpdatedAt.toLocaleTimeString("vi-VN")} · Tự làm mới mỗi phút` : "Chưa tải được số liệu"}
+          </span>
+          <button className="btn-outline" type="button" onClick={loadDashboard} disabled={statsLoading}>
+            <FiRefreshCw aria-hidden="true" />{statsLoading ? "Đang tải…" : "Làm mới số liệu"}
+          </button>
+        </div>
+        {statsError && <div className="nt-admin-stats-error" role="alert">{statsError}{statsLoaded && " Đang hiển thị số liệu từ lần cập nhật thành công gần nhất."}{statsAuthExpired && <button type="button" className="btn-outline" onClick={() => navigate("/login")}>Đăng nhập lại</button>}</div>}
+        {upcomingEvents.length > 0 && <Link className="nt-overview-upcoming" to="/notification"><FaBell aria-hidden="true" /><span><strong>Có lịch tư vấn sắp tới</strong><small>{upcomingEvents[0].name || "Khách hàng"} · {new Date(upcomingEvents[0].event_date).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}</small></span><span>Xem lịch <FiArrowUpRight aria-hidden="true" /></span></Link>}
+        <nav className="nt-overview-shortcuts" aria-label="Thao tác nhanh"><Link to="/qldonhang"><FiShoppingBag aria-hidden="true" /><span>Quản lý đơn hàng</span><FiArrowUpRight aria-hidden="true" /></Link><Link to="/notification"><FiCalendar aria-hidden="true" /><span>Lịch tư vấn</span><FiArrowUpRight aria-hidden="true" /></Link><Link to="/qlsanpham"><FiPackage aria-hidden="true" /><span>Dịch vụ & sản phẩm</span><FiArrowUpRight aria-hidden="true" /></Link><Link to="/qltinnhan"><FiMessageSquare aria-hidden="true" /><span>Tin nhắn khách hàng</span><FiArrowUpRight aria-hidden="true" /></Link></nav>
 
         {/* STATS */}
 
-        <div className="stats-grid">
+        <div className="stats-grid" aria-busy={statsLoading}>
 
           <div className="stat-card">
             <div className="stat-icon users">
@@ -501,7 +429,8 @@ const Dashboard = () => {
             </div>
             <div className="stat-content">
               <h4>Người dùng</h4>
-              <h2>{stats.total_users}</h2>
+              <h2>{formatCount(stats.total_users)}</h2>
+              {statsLoaded && Number.isSafeInteger(stats.total_customers) && <p className="online-payment-meta">{formatCount(stats.total_customers)} khách hàng · {formatCount(stats.total_users - stats.total_customers)} quản trị viên</p>}
             </div>
           </div>
 
@@ -511,7 +440,7 @@ const Dashboard = () => {
             </div>
             <div className="stat-content">
               <h4>Dịch vụ</h4>
-              <h2>{stats.total_products}</h2>
+              <h2>{formatCount(stats.total_products)}</h2>
             </div>
           </div>
 
@@ -521,7 +450,7 @@ const Dashboard = () => {
             </div>
             <div className="stat-content">
               <h4>Đơn hàng</h4>
-              <h2>{stats.total_orders}</h2>
+              <h2>{formatCount(stats.total_orders)}</h2>
             </div>
           </div>
 
@@ -531,7 +460,7 @@ const Dashboard = () => {
             </div>
             <div className="stat-content">
               <h4>Lịch tư vấn</h4>
-              <h2>{consultations.length}</h2>
+              <h2>{formatCount(stats.total_consultations)}</h2>
             </div>
           </div>
 
@@ -541,8 +470,8 @@ const Dashboard = () => {
             </div>
             <div className="stat-content">
               <h4>Doanh thu</h4>
-              <h2>{formatMoney(stats.total_revenue)}</h2>
-              <div className="revenue-badge">🔥 Nổi bật</div>
+              <h2>{statsLoaded ? formatMoney(stats.total_revenue) : "—"}</h2>
+
             </div>
           </div>
 
@@ -551,11 +480,11 @@ const Dashboard = () => {
               <FaCreditCard />
             </div>
             <div className="stat-content">
-              <h4>Thanh toán online</h4>
-              <h2>{stats.online_payments || 0}</h2>
-              <p className="online-payment-meta">
-                {formatMoney(stats.online_payment_revenue || 0)} • {stats.online_payment_rate || 0}% đơn
-              </p>
+              <h4>Đơn chọn chuyển khoản</h4>
+              <h2>{formatCount(stats.online_payments || 0)}</h2>
+              {statsLoaded && <p className="online-payment-meta">
+                {formatMoney(stats.online_payment_revenue || 0)} đã thanh toán · {stats.online_payment_rate || 0}% tổng đơn
+              </p>}
             </div>
           </div>
 
@@ -563,27 +492,31 @@ const Dashboard = () => {
 
         {/* CHART */}
 
-        <div className="charts">
+        {statsLoaded && <div className="charts">
 
-          <div className="chart-box">
-            <h3>Doanh thu theo tháng</h3>
-            <Bar data={barData}/>
+          <div className="chart-box nt-revenue-chart">
+            <div className="nt-overview-panel-title"><div><h3>Doanh thu theo tháng</h3><p>Hiệu quả kinh doanh trong {revenueRange} tháng gần nhất</p></div><div className="nt-chart-period" role="group" aria-label="Khoảng thời gian doanh thu">{[6, 12].map(months => <button type="button" key={months} aria-pressed={revenueRange === months} onClick={() => setRevenueRange(months)}>{months} tháng</button>)}</div></div>
+            <div className="nt-revenue-summary"><div><span>Doanh thu trong kỳ</span><strong>{formatMoney(periodRevenue)}</strong></div><div><span>Bình quân / tháng</span><strong>{formatMoney(Math.round(averageRevenue))}</strong></div></div>
+            <div className="nt-chart-unit">Đơn vị: triệu đồng</div>
+            <div className="nt-admin-chart-canvas"><Bar role="img" aria-label={`Biểu đồ doanh thu ${revenueRange} tháng, tổng ${formatMoney(periodRevenue)}`} data={barData} options={{ animation: chartMotion, responsive: true, maintainAspectRatio: false, interaction: { mode: "index", intersect: false }, plugins: { ...chartPlugins, tooltip: chartTooltip, legend: { display: false } }, scales: chartScales }} /></div>
+            <div className="nt-chart-footnote"><span /><span>Doanh thu ghi nhận theo tháng</span></div>
           </div>
 
-          <div className="chart-box">
-            <h3>Tỷ lệ đơn hàng</h3>
-            <Pie data={pieData}/>
+          <div className="chart-box nt-status-chart">
+            <div className="nt-overview-panel-title"><div><h3>Tiến độ đơn hàng</h3><p>Theo dõi tình trạng phục vụ khách hàng</p></div><Link to="/qldonhang">Xem đơn <FiArrowUpRight aria-hidden="true" /></Link></div>
+            {stats.total_orders > 0 ? <div className="nt-overview-donut"><div className="nt-admin-chart-canvas"><Doughnut data={pieData} options={{ animation: chartMotion, cutout: "70%", borderWidth: 0, spacing: 3, responsive: true, maintainAspectRatio: false, plugins: { ...chartPlugins, legend: { display: false } } }} /></div><div className="nt-overview-donut-total"><strong>{formatCount(stats.total_orders)}</strong><span>Tổng đơn hàng</span></div></div> : <div className="nt-overview-chart-empty">Chưa có đơn hàng để thống kê.</div>}
+            <div className="nt-status-table"><div className="nt-status-table-head"><span>Trạng thái</span><span>Số đơn</span><span>Tỷ lệ</span></div>{pieData.labels.map((label, index) => { const count = Number(pieData.datasets[0].data[index]) || 0; return <div className="nt-status-table-row" key={label} style={{ "--nt-status-color": pieData.datasets[0].backgroundColor[index] }}><span><i style={{ backgroundColor: pieData.datasets[0].backgroundColor[index] }} />{label}</span><strong>{formatCount(count)}</strong><span>{formatPercent(stats.total_orders ? count / stats.total_orders * 100 : 0)}</span></div>; })}</div>
           </div>
 
-        </div>
+        </div>}
 
         <div className="export-section">
           <div className="export-card">
             <div className="export-card-head">
               <div className="export-title-group">
                 <span className="export-eyebrow">Báo cáo nhanh</span>
-                <h3><FaDownload /> Xuất dữ liệu thống kê</h3>
-                <p>Chọn khoảng thời gian cần tải xuống dưới dạng CSV để mở trong Excel hoặc Google Sheets.</p>
+                <h3><FaDownload /> Xuất báo cáo</h3>
+                <p>Tải dữ liệu CSV để mở bằng Excel hoặc Google Sheets.</p>
               </div>
 
               <div className="export-summary">
@@ -605,19 +538,21 @@ const Dashboard = () => {
                   value={selectedExportType}
                   onChange={(e) => setSelectedExportType(e.target.value)}
                 >
-                  <option value="day">📅 Xuất theo ngày</option>
-                  <option value="month">📆 Xuất theo tháng</option>
-                  <option value="year">📊 Xuất theo năm</option>
-                  <option value="quarter">📈 Xuất theo quý</option>
+                  <option value="day">Theo ngày</option>
+                  <option value="month">Theo tháng</option>
+                  <option value="year">Theo năm</option>
+                  <option value="quarter">Theo quý</option>
                 </select>
               </div>
 
               <button
                 className="export-btn primary"
+                type="button"
+                disabled={exporting}
                 onClick={() => exportStatistics(selectedExportType)}
                 title="Tải file CSV"
               >
-                <FaDownload /> Tải ngay
+                <FaDownload /> {exporting ? "Đang tải…" : "Tải báo cáo CSV"}
               </button>
             </div>
 
@@ -634,7 +569,7 @@ const Dashboard = () => {
         <div className="work-schedule-box">
           <div className="calendar-panel">
             <div className="calendar-head">
-              <h3><FaRegCalendarAlt /> Lịch làm việc theo tháng</h3>
+              <h3><FaRegCalendarAlt /> Lịch tư vấn</h3>
               <div className="month-nav">
                 <button
                   type="button"
@@ -644,7 +579,7 @@ const Dashboard = () => {
                     )
                   }
                 >
-                  <FaChevronLeft />
+                  <FaChevronLeft aria-label="Tháng trước" />
                 </button>
                 <span>{currentMonthLabel}</span>
                 <button
@@ -655,7 +590,7 @@ const Dashboard = () => {
                     )
                   }
                 >
-                  <FaChevronRight />
+                  <FaChevronRight aria-label="Tháng sau" />
                 </button>
               </div>
             </div>
@@ -679,6 +614,8 @@ const Dashboard = () => {
                   <button
                     type="button"
                     key={item.key}
+                    aria-label={`${item.day} ${currentMonthLabel}${item.eventCount ? `, ${item.eventCount} lịch tư vấn` : ""}`}
+                    aria-pressed={isSelected}
                     className={`day-cell ${item.eventCount > 0 ? "has-event" : ""} ${isSelected ? "selected" : ""} ${isToday ? "today" : ""}`}
                     onClick={() => setSelectedDateKey(item.dateKey)}
                   >
@@ -694,7 +631,7 @@ const Dashboard = () => {
 
           <div className="schedule-panel">
             <div className="schedule-head">
-              <h3>Thời khóa biểu tiếc</h3>
+              <h3>Lịch trong ngày</h3>
               <span>
                 {selectedDateKey
                   ? new Date(selectedDateKey).toLocaleDateString("vi-VN")
@@ -702,9 +639,9 @@ const Dashboard = () => {
               </span>
             </div>
 
-            {selectedScheduleItems.length === 0 ? (
+            {consultationsLoading ? <div className="schedule-empty" role="status">Đang tải lịch tư vấn…</div> : consultationsError ? <div className="schedule-empty" role="alert">{consultationsError}<button className="btn-outline" type="button" onClick={loadConsultations}>Thử lại</button></div> : selectedScheduleItems.length === 0 ? (
               <div className="schedule-empty">
-                Ngày này chưa có lịch tiếc.
+                Chưa có lịch tư vấn trong ngày đã chọn.
               </div>
             ) : (
               <div className="schedule-list">
@@ -715,8 +652,8 @@ const Dashboard = () => {
                       <span>{item.service || "Chưa chọn dịch vụ"}</span>
                     </div>
                     <div className="meta-row">
-                      <span>📞 {item.phone || "Chưa có số điện thoại"}</span>
-                      <span>📍 {item.address || "Chưa có địa điểm"}</span>
+                      <span><FiPhone aria-hidden="true" />{item.phone || "Chưa có số điện thoại"}</span>
+                      <span><FiMapPin aria-hidden="true" />{item.address || "Chưa có địa điểm"}</span>
                     </div>
                   </div>
                 ))}
@@ -725,16 +662,16 @@ const Dashboard = () => {
           </div>
         </div>
 
-        <div className="ai-box">
-          <div className="ai-box-header">
-            <h3><FaRobot /> AI đề xuất tối ưu sản phẩm</h3>
-            <span>Dựa trên tần suất sử dụng + tỉ lệ hoàn tất đơn</span>
-          </div>
+        <details className="ai-box">
+          <summary className="ai-box-header">
+            <h3><FaRobot /> Gợi ý dịch vụ</h3>
+            <span>Dựa trên số liệu đơn hàng</span><FiChevronDown aria-hidden="true" />
+          </summary>
 
           {aiLoading ? (
             <div className="ai-empty">Đang phân tích dữ liệu sản phẩm...</div>
           ) : aiSuggestions.length === 0 ? (
-            <div className="ai-empty">Chưa có dữ liệu đơn hàng đủ để AI đề xuất.</div>
+            <div className="ai-empty">Chưa đủ dữ liệu để gợi ý dịch vụ.</div>
           ) : (
             <div className="ai-grid">
               {aiSuggestions.map((item) => (
@@ -793,21 +730,24 @@ const Dashboard = () => {
               ))}
             </div>
           )}
-        </div>
+        </details>
 
         {/* CONSULT */}
 
         <div className="consultation-box">
 
           <div className="consultation-head">
-            <h3>Lịch tư vấn mới</h3>
-            <span className="consultation-note">Hiển thị 3 lịch gần nhất</span>
+            <h3>Yêu cầu tư vấn mới</h3>
+            <Link to="/notification">Xem tất cả <FiArrowUpRight aria-hidden="true" /></Link>
           </div>
 
           <div className="consult-grid">
+            {consultationsLoading && <p className="nt-overview-consult-empty" role="status">Đang tải yêu cầu tư vấn…</p>}
+            {!consultationsLoading && consultationsError && <p className="nt-overview-consult-empty" role="alert">{consultationsError}</p>}
+            {!consultationsLoading && !consultationsError && consultations.length === 0 && <p className="nt-overview-consult-empty">Chưa có yêu cầu tư vấn.</p>}
 
             {consultations.slice(0, 3).map(item=>(
-              
+
               <div
                 key={item.id}
                 className="consult-card clickable"

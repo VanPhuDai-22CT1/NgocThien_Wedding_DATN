@@ -1,4 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
+import { loadBackendEnv } from '../config/env';
+
+loadBackendEnv();
 
 const WINDOW_MS = 15 * 60 * 1000;
 const MAX_REQUESTS = 120;

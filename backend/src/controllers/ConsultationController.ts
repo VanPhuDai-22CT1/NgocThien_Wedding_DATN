@@ -1,13 +1,57 @@
 import { Response } from 'express';
-import { Consultation } from '../models';
+import { Consultation, Order, Product } from '../models';
+import Joi from 'joi';
+import { pagination } from '../utils/pagination';
 import { AuthRequest } from '../middleware/auth';
 import { Op } from 'sequelize';
 
 class ConsultationController {
-  async getConsultations(req: AuthRequest, res: Response) {
+  async createQuote(req: AuthRequest, res: Response) {
+    const schema = Joi.object({
+      product_id: Joi.number().integer().positive().required(),
+      intent: Joi.string().valid('quote', 'consultation').default('quote'),
+      name: Joi.string().trim().max(120).required().messages({ 'string.empty': 'Vui lòng nhập họ và tên.' }),
+      phone: Joi.string().pattern(/^(?:0\d{9}|\+84\d{9})$/).required().messages({ 'string.pattern.base': 'Số điện thoại không hợp lệ.' }),
+      event_date: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).required(),
+      location: Joi.string().trim().max(250).required(),
+      scale: Joi.string().trim().max(250).required(),
+      note: Joi.string().trim().max(2000).allow('').default(''),
+      color: Joi.string().trim().max(100).allow('').default(''),
+    });
+    const { error, value } = schema.validate(req.body || {}, { abortEarly: false, stripUnknown: true });
+    if (error) {
+      return res.status(400).json({ success: false, message: 'Vui lòng kiểm tra các trường đã nhập.', errors: Object.fromEntries(error.details.map((item) => [item.path[0], item.message])) });
+    }
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
+    const date = new Date(`${value.event_date}T12:00:00+07:00`);
+    if (!Number.isFinite(date.getTime()) || date.toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }) !== value.event_date || value.event_date < today) {
+      return res.status(400).json({ success: false, message: 'Ngày tổ chức không hợp lệ.', errors: { event_date: 'Chọn ngày tổ chức từ hôm nay trở đi.' } });
+    }
     try {
-      const { page = 1, limit = 20, status, search } = req.query;
-      const offset = ((page as unknown as number) - 1) * (limit as unknown as number);
+      const product = await Product.findByPk(value.product_id);
+      if (!product) return res.status(404).json({ success: false, message: 'Sản phẩm không còn trong danh mục. Vui lòng chọn lại.' });
+      const intent = value.intent === 'consultation' ? 'Tư vấn' : 'Báo giá';
+      const consultation = await Consultation.create({
+        user_id: req.user?.id || null, name: value.name, email: req.user?.email || '', phone: value.phone,
+        service: `${intent}: ${product.name}`, event_date: date,
+        note: [`Loại yêu cầu: ${intent}`, `Sản phẩm #${product.id}: ${product.name}`, `Địa điểm: ${value.location}`, `Quy mô / số lượng: ${value.scale}`, value.color ? `Tông màu: ${value.color}` : '', value.note ? `Mong muốn: ${value.note}` : '', 'Chưa xác nhận đơn đặt dịch vụ hoặc lịch phục vụ.'].filter(Boolean).join('\n'),
+        status: 'pending', is_read: false,
+      });
+      return res.status(201).json({ success: true, message: 'Đã tiếp nhận yêu cầu báo giá. Chúng tôi sẽ liên hệ để tư vấn và xác nhận lịch phục vụ.', data: { id: consultation.id, status: 'pending' } });
+    } catch (error) {
+      console.error('Create quote error:', error);
+      return res.status(500).json({ success: false, message: 'Chưa lưu được yêu cầu. Vui lòng thử lại, nội dung của bạn vẫn được giữ trong biểu mẫu.' });
+    }
+  }
+
+  async getConsultations(req: AuthRequest, res: Response) {
+    let paging;
+    try { paging = pagination(req.query); } catch (error: any) {
+      return res.status(400).json({ success: false, message: error.message });
+    }
+    try {
+      const { status, search } = req.query;
+      const { page, limit, offset } = paging;
 
       const where: any = {};
       if (status) {
@@ -150,9 +194,14 @@ class ConsultationController {
         attributes: ['event_date'],
       });
 
-      const dates = consultations.map((c) => ({
-        event_date: c.event_date?.toISOString().split('T')[0],
-      }));
+      const orders = await Order.findAll({
+        where: { status: { [Op.ne]: 'cancelled' }, event_date: { [Op.ne]: null } },
+        attributes: ['event_date'],
+      });
+      const dates = [
+        ...consultations.map((c) => ({ event_date: c.event_date ? new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(c.event_date)) : null })),
+        ...orders.map((o) => ({ event_date: o.event_date })),
+      ];
 
       res.json({
         success: true,

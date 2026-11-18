@@ -63,6 +63,16 @@ npm run build
 npm --prefix backend run build
 ```
 
+## Kiểm tra chức năng
+
+Sau khi MySQL và backend đang chạy:
+
+```sh
+npm --prefix backend test
+```
+
+Bộ kiểm thử dùng dữ liệu thử riêng và dọn theo ID của lượt chạy. Xem [báo cáo sửa lỗi và kiểm thử](docs/QA_REPORT.md) để biết phạm vi đã kiểm tra và các phần cần xác minh với dịch vụ bên ngoài.
+
 ## Cấu hình
 
 Các mẫu cấu hình nằm trong `.env.example` và `backend/.env.sample`. Hãy thay `JWT_SECRET`, thông tin cơ sở dữ liệu và SMTP bằng giá trị riêng của môi trường trước khi triển khai. Không sử dụng cấu hình mặc định cho môi trường production.

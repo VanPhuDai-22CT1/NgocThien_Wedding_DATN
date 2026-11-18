@@ -3,13 +3,13 @@ export const ROUTERS = {
         HOME: "/",
         PROFILE: "/giohang",
         PRODUCT: "/product/:id",
-        PRODUCT_DETAIL: "/chitietsanpham",
+        PRODUCT_DETAIL: "/chitietsanpham/:id",
         LOGIN: "/login",
         //RESET: "/reset",
-        FORGOT: "/quenmatkhau", 
-        RESET: "/datlaimatkhau",   
+        FORGOT: "/quenmatkhau",
+        RESET: "/datlaimatkhau",
         Register: "/dangky",
-        ORDERS: "/giohang",  
+        ORDERS: "/giohang",
         ProductDetailPage: "/chitietsanpham",
         ProductsPage: "/sanpham",
         FreshVeggiesShop:"/gioithieu",
@@ -19,7 +19,7 @@ export const ROUTERS = {
         Payment: "/thanhtoan",
         Notification:"/thongbao",
 
-        
+
     },
     ADMIN:{
         ProductManagement:"/qlsanpham",
@@ -34,4 +34,4 @@ export const ROUTERS = {
             CoderProfile: "/admin/ho-so-nguoi-code",
             }
  };
- 
+

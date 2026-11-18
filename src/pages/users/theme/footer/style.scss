@@ -14,6 +14,8 @@
    FOOTER ABOUT
 ========================= */
 .footer__about {
+  .footer__brand { display: inline-block; color: #982332; margin-bottom: 10px; }
+  .footer__brand-caption { font-size: 12px; letter-spacing: .08em; color: #947b68; margin: 0; }
   ul {
     padding: 0;
     margin-bottom: 15px;

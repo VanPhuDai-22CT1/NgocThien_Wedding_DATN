@@ -1,3 +1,4 @@
+@use "../../../style/buttons" as buttons;
 /* ======================================================
    RESET + BASE
 ====================================================== */
@@ -1404,3 +1405,6 @@ h6 {
   font-size: 13px;
   font-weight: 600;
 }
+
+
+.home-page-shell .consult-form .consult-btn { @include buttons.primary; width: 100%; }

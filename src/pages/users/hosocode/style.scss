@@ -1,3 +1,6 @@
+
+@layer nt-admin-legacy {
+:where(.nt-admin-body) {
 .coder-admin-layout {
   display: flex;
   min-height: 100vh;
@@ -328,4 +331,7 @@
   .coder-hero-content h1 {
     font-size: 28px;
   }
+}
+
+}
 }

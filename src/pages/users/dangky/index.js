@@ -1,157 +1,62 @@
-import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import React, { useRef, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { apiClient } from "utils/apiClient";
-import logo from "assets/users/images/icondau/logodvkv.png";
-import nen from "assets/users/images/nen/nendn.jpg";
-import "./style.scss";
+import AuthLayout, { AuthField, AuthMessage, emailValid, focusAuthError, passwordError } from "component/AuthLayout";
 
 const RegisterPage = () => {
-  const [username, setUsername] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [phone, setPhone] = useState("");
-  const [address, setAddress] = useState("");
-  const [errorMessage, setErrorMessage] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
-
+  const location = useLocation();
   const navigate = useNavigate();
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setErrorMessage("");
-    setSuccessMessage("");
-
-    // Validate
-    if (!username.trim()) {
-      setErrorMessage("Vui lòng nhập tên người dùng");
-      return;
-    }
-
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setErrorMessage("Email không hợp lệ");
-      return;
-    }
-
-    if (password.length < 6) {
-      setErrorMessage("Mật khẩu phải có ít nhất 6 ký tự");
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setErrorMessage("Mật khẩu không khớp");
-      return;
-    }
-
-    if (!phone.trim()) {
-      setErrorMessage("Vui lòng nhập số điện thoại");
-      return;
-    }
-
-    if (!address.trim()) {
-      setErrorMessage("Vui lòng nhập địa chỉ");
-      return;
-    }
-
-    try {
-      const response = await apiClient.post("/auth/register", {
-        username,
-        email,
-        password,
-        confirmPassword,
-        phone,
-        address,
-      });
-
-      const data = response.data || {};
-
-      if (data.success) {
-        setSuccessMessage("Đăng ký thành công! Đang chuyển sang đăng nhập...");
-        setTimeout(() => navigate("/login"), 1500);
-      } else {
-        setErrorMessage(data.message || "Đăng ký thất bại");
-      }
-    } catch (error) {
-      setErrorMessage(error?.response?.data?.message || "Không kết nối được backend");
-    }
+  const returnSearch = new URLSearchParams(location.search).get("returnTo") === "/thanhtoan" ? "?returnTo=%2Fthanhtoan" : "";
+  const [form, setForm] = useState({ username: "", email: location.state?.email || "", phone: "", address: "", password: "", confirmPassword: "" });
+  const [errors, setErrors] = useState({});
+  const [message, setMessage] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const submitting = useRef(false);
+  const change = (event) => {
+    const { name, value } = event.target;
+    setForm((previous) => ({ ...previous, [name]: value }));
+    setErrors((previous) => ({ ...previous, [name]: "", ...(name === "password" ? { confirmPassword: "" } : {}) })); setMessage(null);
   };
-
-  return (
-    <div
-      className="registerpage"
-      style={{ backgroundImage: `url(${nen})` }}
-    >
-      <div className="register-form">
-        <form className="login-form" onSubmit={handleSubmit}>
-
-          <div className="login-image">
-            <img src={logo} alt="Logo dịch vụ" />
-          </div>
-
-          <h1>Đăng ký</h1>
-
-          <input
-            className="b"
-            type="text"
-            placeholder="Tên người dùng"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-          />
-
-          <input
-            className="b"
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-
-          <input
-            className="b"
-            type="password"
-            placeholder="Mật khẩu"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-
-          <input
-            className="b"
-            type="password"
-            placeholder="Xác nhận mật khẩu"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-          />
-
-          <input
-            className="b"
-            type="text"
-            placeholder="Số điện thoại"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-          />
-
-          <input
-            className="b"
-            type="text"
-            placeholder="Địa chỉ"
-            value={address}
-            onChange={(e) => setAddress(e.target.value)}
-          />
-
-          <button type="submit" className="btn-register">
-            Đăng ký
-          </button>
-
-          {errorMessage && <p className="error-message">{errorMessage}</p>}
-          {successMessage && <p className="success-message">{successMessage}</p>}
-
-          <p>
-            Đã có tài khoản? <Link to="/login">Đăng nhập</Link>
-          </p>
-        </form>
+  const submit = async (event) => {
+    event.preventDefault(); if (submitting.current) return;
+    const next = {};
+    if (!form.username.trim()) next.username = "Vui lòng nhập tên người dùng.";
+    if (!emailValid(form.email.trim())) next.email = "Vui lòng nhập địa chỉ email hợp lệ.";
+    if (!form.phone.trim()) next.phone = "Vui lòng nhập số điện thoại.";
+    if (!form.address.trim()) next.address = "Vui lòng nhập địa chỉ.";
+    const invalidPassword = passwordError(form.password);
+    if (invalidPassword) next.password = invalidPassword;
+    if (!form.confirmPassword || form.password !== form.confirmPassword) next.confirmPassword = "Mật khẩu xác nhận chưa khớp.";
+    setErrors(next); setMessage(null);
+    if (Object.keys(next).length) { focusAuthError(event.currentTarget, next); return; }
+    submitting.current = true; setLoading(true);
+    let leaving = false;
+    try {
+      const response = await apiClient.post("/auth/register", { ...form, username: form.username.trim(), email: form.email.trim(), phone: form.phone.trim(), address: form.address.trim() });
+      if (!response.data?.success) { setMessage({ text: response.data?.message || "Chưa tạo được tài khoản. Vui lòng thử lại." }); return; }
+      leaving = true;
+      setMessage({ type: "success", text: "Tạo tài khoản thành công! Đang chuyển sang đăng nhập…" });
+      setTimeout(() => navigate(`/login${returnSearch}`, { replace: true }), 1500);
+    } catch (error) {
+      if (error.response?.status === 409) setErrors({ username: "Email hoặc tên người dùng đã được sử dụng.", email: "Email hoặc tên người dùng đã được sử dụng." });
+      else setMessage({ text: error.response?.data?.message || "Chưa kết nối được hệ thống. Thông tin đã nhập của bạn vẫn được giữ lại." });
+    } finally { if (!leaving) { submitting.current = false; setLoading(false); } }
+  };
+  const props = (name) => ({ name, value: form[name], onChange: change, error: errors[name], disabled: loading, required: true });
+  return <AuthLayout variant="register" title="Bắt đầu hành trình hạnh phúc" subtitle="Tạo tài khoản để khám phá và đặt dịch vụ cưới hỏi tại Ngọc Thiện">
+    <form className="nt-auth-form" onSubmit={submit} noValidate aria-busy={loading}>
+      <AuthField label="Tên người dùng" autoComplete="username" maxLength={100} placeholder="Tên bạn muốn sử dụng" {...props("username")} />
+      <AuthField label="Email" type="email" inputMode="email" autoComplete="email" maxLength={100} placeholder="Email của bạn" {...props("email")} />
+      <div className="nt-auth-field-row">
+        <AuthField label="Số điện thoại" type="tel" inputMode="tel" autoComplete="tel" maxLength={20} placeholder="Số điện thoại" {...props("phone")} />
+        <AuthField label="Địa chỉ" autoComplete="street-address" placeholder="Địa chỉ của bạn" {...props("address")} />
       </div>
-    </div>
-  );
+      <AuthField label="Mật khẩu" type="password" autoComplete="new-password" placeholder="Tạo mật khẩu" hint="Ít nhất 6 ký tự. Dùng mật khẩu riêng cho tài khoản của bạn." {...props("password")} />
+      <AuthField label="Xác nhận mật khẩu" type="password" autoComplete="new-password" placeholder="Nhập lại mật khẩu" {...props("confirmPassword")} />
+      <AuthMessage type={message?.type}>{message?.text}</AuthMessage>
+      <button type="submit" className="nt-auth-submit" disabled={loading} aria-busy={loading}>{loading ? "Đang tạo tài khoản…" : "Tạo tài khoản"}</button>
+    </form>
+    <p className="nt-auth-switch">Đã có tài khoản?<Link to={`/login${returnSearch}`}>Đăng nhập</Link></p>
+  </AuthLayout>;
 };
-
 export default RegisterPage;

@@ -1,292 +1,64 @@
-import React, { useEffect, useMemo, useState } from "react";
-import axios from "axios";
-import { useLocation, useNavigate } from "react-router-dom";
-import { FaMoneyBillWave, FaQrcode, FaCheckCircle } from "react-icons/fa";
+import { useEffect, useRef, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { FiArrowLeft, FiArrowRight, FiCreditCard, FiDollarSign } from "react-icons/fi";
 import { getAuthItem } from "utils/authStorage";
-import { apiClient, buildAuthHeaders } from "utils/apiClient";
-import "./style.scss";
-import { notify } from "utils/notify";
+import { apiClient } from "utils/apiClient";
+import { removeGuestCartItem } from "utils/guestCart";
+import BankTransferCard from "component/Checkout/BankTransferCard";
+import { CheckoutLayout, EmptyState, OrderSummary, bankConfigured, cartTotal, dateLabel, normalizeCart, restoreCheckout, saveCheckout, validCart, validateBooking } from "component/Checkout/shared";
 
-const BANK_BIN = process.env.REACT_APP_BANK_BIN || "970423";
-const BANK_ACCOUNT = process.env.REACT_APP_BANK_ACCOUNT || "24122004079";
-const BANK_ACCOUNT_NAME = process.env.REACT_APP_BANK_ACCOUNT_NAME || "VAN PHU DAI";
-const ONLINE_DEPOSIT_RATE = 0.1;
-
-const formatDateInput = (date) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-};
-
-const ThanhToan = () => {
-  const [method, setMethod] = useState("cash");
-  const [loading, setLoading] = useState(false);
-  const [cartItems, setCartItems] = useState([]);
-  const [bookingForm, setBookingForm] = useState(null);
-
-  const navigate = useNavigate();
-  const location = useLocation();
-  const userId = getAuthItem("user_id");
-  const minEventDate = (() => {
-    const minDate = new Date();
-    minDate.setDate(minDate.getDate() + 2);
-    return formatDateInput(minDate);
-  })();
-
+export default function PaymentPage() {
+  const location = useLocation(); const navigate = useNavigate(); const userId = getAuthItem("user_id");
+  const data = useRef(restoreCheckout(location.state));
+  const items = normalizeCart(data.current?.cartItems); const form = data.current?.bookingForm;
+  const [method, setMethod] = useState("cash"); const [sending, setSending] = useState(false); const [error, setError] = useState("");
+  const lock = useRef(false);
   useEffect(() => {
     if (!userId) {
-      notify.info("Vui lòng đăng nhập để tiếp tục thanh toán. Nhấn OK để chuyển sang trang đăng nhập.");
-      navigate("/login");
-      return;
+      if (data.current) saveCheckout(data.current);
+      navigate("/login?returnTo=%2Fthanhtoan", { replace: true });
+    } else if (data.current) saveCheckout(data.current);
+  }, [userId, navigate]);
+  const cleanup = async () => {
+    const purchased = items.filter((item) => !String(item.id).startsWith("direct-"));
+    if (!purchased.length) return;
+    const current = await apiClient.get("/cart"); if (!current.data.success) throw new Error();
+    const fields = ["package_id", "color", "event_date", "location", "note"];
+    for (const bought of purchased) {
+      const line = current.data.data?.find((item) => String(item.id) === String(bought.id) || (Number(item.productId) === Number(bought.productId || bought.product_id) && fields.every((field) => (item.selection?.[field] || "") === (bought.selection?.[field] || ""))));
+      if (!line) continue;
+      const remaining = Number(line.quantity) - bought.quantity;
+      const response = remaining > 0 ? await apiClient.put(`/cart/${line.id}`, { quantity: remaining }) : await apiClient.delete(`/cart/${line.id}`);
+      if (!response.data.success) throw new Error();
     }
-
-    if (location.state?.bookingForm) {
-      setBookingForm(location.state.bookingForm);
-    }
-
-    if (location.state?.cartItems && Array.isArray(location.state.cartItems)) {
-      setCartItems(location.state.cartItems);
-      return;
-    }
-
-    apiClient
-      .get("/cart", {
-        params: { userid: userId },
-      })
-      .then((res) => {
-        if (res.data?.success) {
-          setCartItems(res.data.data || []);
-        }
-      })
-      .catch(() => {});
-  }, [userId, location.state, navigate]);
-
-  const total = useMemo(
-    () => cartItems.reduce((sum, item) => sum + Number(item.price) * Number(item.quantity), 0),
-    [cartItems]
-  );
-
-  const onlineDepositAmount = useMemo(
-    () => Math.max(0, Math.round((Number(total) || 0) * ONLINE_DEPOSIT_RATE)),
-    [total]
-  );
-
-  const amountToPay = method === "bank" ? onlineDepositAmount : total;
-
-  const transferContent = useMemo(() => {
-    const rawName = String(bookingForm?.name || "KHACH").replace(/\s+/g, "").slice(0, 12);
-    return `NTW ${rawName} ${bookingForm?.eventDate || ""}`.trim();
-  }, [bookingForm]);
-
-  const qrImageUrl = useMemo(() => {
-    const amount = Math.max(0, Math.round(Number(amountToPay) || 0));
-    const base = `https://img.vietqr.io/image/${BANK_BIN}-${BANK_ACCOUNT}-compact2.png`;
-    const params = new URLSearchParams({
-      amount: String(amount),
-      addInfo: transferContent,
-      accountName: BANK_ACCOUNT_NAME,
-    });
-    return `${base}?${params.toString()}`;
-  }, [amountToPay, transferContent]);
-
-  const paymentLabel = method === "cash"
-    ? "Thanh toán khi gặp trực tiếp"
-    : "Đặt cọc online 10%";
-
-  const handlePayment = async () => {
-    if (!userId) {
-      notify.info("⚠️ Bạn chưa đăng nhập");
-      return;
-    }
-
-    if (!bookingForm?.name || !bookingForm?.phone || !bookingForm?.eventDate) {
-      notify.info("Thiếu thông tin đặt dịch vụ. Vui lòng quay lại bước trước.");
-      return;
-    }
-
-    if (bookingForm.eventDate < minEventDate) {
-      notify.info("Ngày cưới phải cách ngày hiện tại ít nhất 2 ngày.");
-      return;
-    }
-
-    if (cartItems.length === 0) {
-      notify.info("Giỏ dịch vụ đang trống");
-      return;
-    }
-
-    try {
-      setLoading(true);
-
-      const orderItems = cartItems.map((item) => ({
-        product_id: Number(item.productId || item.product_id || item.id),
-        quantity: Number(item.quantity || 1),
-      }));
-
-      const res = await apiClient.post(
-        "/orders",
-        {
-          user_id: Number(userId),
-          items: orderItems,
-          payment_method: method,
-          delivery_address: bookingForm.location,
-          phone: bookingForm.phone,
-          email: bookingForm.email,
-          note: `Wedding date: ${bookingForm.eventDate || ""}. ${bookingForm.note || ""}`,
-        },
-        {
-          headers: buildAuthHeaders(),
-        }
-      );
-
-      if (res.data.success) {
-        const orderId = res.data?.data?.order_id;
-        const orderTime = new Date().toLocaleString("vi-VN");
-
-        if (userId) {
-          try {
-            await apiClient.delete(`/cart/user/${userId}`, { headers: buildAuthHeaders() });
-          } catch (error) {
-            console.error("Clear cart error:", error);
-          }
-        }
-
-        navigate(`/hoadon/${orderId}`, {
-          state: {
-            orderNotice: {
-              orderId,
-              orderTime,
-              status: "Đang xử lý",
-              message: "Đặt dịch vụ thành công. Chúng tôi sẽ liên hệ lại sớm nhất."
-            }
-          }
-        });
-      } else {
-        notify.info(res.data.message || "Thanh toán thất bại");
-      }
-    } catch (error) {
-      console.error(error);
-      notify.info("❌ Lỗi kết nối server");
-    } finally {
-      setLoading(false);
-    }
+    purchased.filter((item) => String(item.id).startsWith("guest-")).forEach((item) => removeGuestCartItem(item.id));
   };
-
-  return (
-    <div className="payment-wrapper">
-      <div className="payment-card">
-        <h2>Xác nhận đặt dịch vụ & thanh toán</h2>
-        <p className="payment-subtitle">Ngọc Thiện Wedding • Hoàn tất thông tin trước khi chốt lịch</p>
-
-        <div className="payment-summary-grid">
-          {bookingForm ? (
-            <div className="confirm-box">
-              <FaCheckCircle className="confirm-icon" />
-              <h3>Thông tin khách hàng</h3>
-              <div className="info-list">
-                <p><strong>Họ tên:</strong> <span>{bookingForm.name}</span></p>
-                <p><strong>Số điện thoại:</strong> <span>{bookingForm.phone}</span></p>
-                <p><strong>Email:</strong> <span>{bookingForm.email || "-"}</span></p>
-                <p><strong>Ngày cưới dự kiến:</strong> <span>{bookingForm.eventDate}</span></p>
-                <p><strong>Địa điểm tổ chức:</strong> <span>{bookingForm.location || "-"}</span></p>
-                <p><strong>Ghi chú:</strong> <span>{bookingForm.note || "-"}</span></p>
-              </div>
-            </div>
-          ) : (
-            <div className="confirm-box">
-              <h3>Thông tin khách hàng</h3>
-              <p>Không có dữ liệu đặt dịch vụ. Vui lòng quay lại bước trước.</p>
-            </div>
-          )}
-
-          <div className="confirm-box">
-            <h3>Danh sách dịch vụ đã chọn</h3>
-            {cartItems.length === 0 ? (
-              <p>Giỏ dịch vụ đang trống.</p>
-            ) : (
-              <>
-                <div className="service-list">
-                  {cartItems.map((item) => (
-                    <div className="service-item" key={item.id}>
-                      <span className="service-name">{item.name}</span>
-                      <span className="service-meta">× {item.quantity} — {(Number(item.price) * Number(item.quantity)).toLocaleString()} VNĐ</span>
-                    </div>
-                  ))}
-                </div>
-                <p className="total-price"><strong>Tổng tiền:</strong> {total.toLocaleString()} VNĐ</p>
-                {method === "bank" && (
-                  <p className="deposit-price">
-                    <strong>Cần thanh toán online (10%):</strong> {onlineDepositAmount.toLocaleString()} VNĐ
-                  </p>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-
-        <div className="payment-options">
-          <label className={method === "cash" ? "active" : ""}>
-            <input
-              type="radio"
-              value="cash"
-              checked={method === "cash"}
-              onChange={() => setMethod("cash")}
-            />
-            <FaMoneyBillWave className="pay-icon" />
-            <div>
-              <strong>Thanh toán khi gặp trực tiếp</strong>
-              <p>Thanh toán khi nhân viên đến tư vấn/chốt đơn</p>
-            </div>
-          </label>
-
-          <label className={method === "bank" ? "active" : ""}>
-            <input
-              type="radio"
-              value="bank"
-              checked={method === "bank"}
-              onChange={() => setMethod("bank")}
-            />
-            <FaQrcode className="pay-icon" />
-            <div>
-              <strong>Thanh toán chuyển khoản</strong>
-              <p>Chỉ thanh toán cọc 10% giá trị đơn khi đặt online</p>
-            </div>
-          </label>
-        </div>
-
-        {method === "bank" && (
-          <div className="qr-box">
-            <h3>Mã QR chuyển khoản tự động</h3>
-            <p className="qr-note">
-              Quét mã bằng app ngân hàng để chuyển khoản tiền cọc 10%. Phần còn lại thanh toán sau.
-            </p>
-            <div className="qr-content">
-              <img src={qrImageUrl} alt="QR chuyển khoản" className="qr-image" />
-              <div className="qr-meta">
-                <p><strong>Ngân hàng (BIN):</strong> {BANK_BIN}</p>
-                <p><strong>Số tài khoản:</strong> {BANK_ACCOUNT}</p>
-                <p><strong>Chủ tài khoản:</strong> {BANK_ACCOUNT_NAME}</p>
-                <p><strong>Tổng giá trị đơn:</strong> {total.toLocaleString()} VNĐ</p>
-                <p><strong>Số tiền cọc (10%):</strong> {onlineDepositAmount.toLocaleString()} VNĐ</p>
-                <p><strong>Còn lại khi chốt đơn:</strong> {(Math.max(0, total - onlineDepositAmount)).toLocaleString()} VNĐ</p>
-                <p><strong>Nội dung:</strong> {transferContent}</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div className="confirm-actions">
-          <button className="btn-outline" onClick={() => navigate("/dathang", { state: { bookingForm, cartItems } })} disabled={loading}>
-            Chỉnh sửa
-          </button>
-
-          <button className="btn-main" onClick={handlePayment} disabled={loading || cartItems.length === 0 || !bookingForm}>
-            {loading ? "Đang xử lý..." : `Xác nhận đặt dịch vụ (${paymentLabel})`}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-export default ThanhToan;
+  const submit = async () => {
+    if (lock.current || !userId) return;
+    if (!form || Object.keys(validateBooking(form)).length) { setError("Thông tin tổ chức chưa hợp lệ. Vui lòng quay lại chỉnh sửa."); return; }
+    if (!validCart(items)) { setError("Dịch vụ hoặc số lượng chưa hợp lệ. Vui lòng kiểm tra lại giỏ hàng."); return; }
+    lock.current = true; setSending(true); setError("");
+    try {
+      const response = await apiClient.post("/orders", {
+        items: items.map((item) => ({ product_id: Number(item.productId || item.product_id), quantity: item.quantity, selection: item.selection })),
+        payment_method: method, delivery_address: form.location, phone: form.phone, email: form.email,
+        customer_name: form.name, event_date: form.eventDate, note: form.note || "",
+      });
+      const orderId = response.data?.data?.order_id;
+      if (!response.data.success) { setError(response.data.message || "Chưa gửi được yêu cầu. Vui lòng kiểm tra lại thông tin."); lock.current = false; setSending(false); return; }
+      if (!Number.isSafeInteger(Number(orderId)) || Number(orderId) <= 0) throw new Error("Chưa xác nhận được mã đơn. Vui lòng kiểm tra mục Đơn hàng trước khi gửi lại.");
+      let cartWarning = "";
+      try { await cleanup(); } catch { cartWarning = "Yêu cầu đã được tiếp nhận, nhưng giỏ hàng chưa đồng bộ. Vui lòng kiểm tra đơn hàng trước khi đặt lại."; }
+      try { sessionStorage.removeItem("wedding_pending_checkout"); } catch { /* Order has already been accepted by the API. */ }
+      navigate(`/hoadon/${orderId}`, { replace: true, state: { orderNotice: { message: "Đã tiếp nhận yêu cầu đặt dịch vụ. Ngọc Thiện sẽ liên hệ tư vấn và xác nhận lịch phục vụ." }, cartWarning } });
+    } catch (err) { setError(err.response?.data?.message || (err.message?.startsWith("Chưa xác nhận") ? err.message : "Chưa xác nhận được kết quả. Kiểm tra kết nối và mục Đơn hàng trước khi thử lại.")); lock.current = false; setSending(false); }
+  };
+  if (!userId) return <CheckoutLayout step={3} title="Thanh toán" description="Đăng nhập để tiếp tục yêu cầu đặt dịch vụ."><div className="cx-panel cx-loading" role="status">Đang chuyển đến trang đăng nhập…</div></CheckoutLayout>;
+  return <CheckoutLayout step={3} title="Kiểm tra & thanh toán" description="Kiểm tra thông tin và chọn phương thức thanh toán phù hợp.">
+    {!form || !items.length ? <EmptyState title="Chưa có thông tin đặt dịch vụ" message="Quay lại giỏ hàng để chọn dịch vụ và nhập thông tin tổ chức." action={<Link className="cx-button" to="/giohang">Về giỏ hàng</Link>} /> : <div className="cx-grid"><div className="cx-payment-main"><section className="cx-panel cx-contact"><div className="cx-section-heading"><h2>Thông tin tổ chức</h2><button className="cx-text-button" type="button" disabled={sending} onClick={() => navigate("/dathang", { state: { cartItems: items, bookingForm: form } })}>Chỉnh sửa</button></div><dl className="cx-details"><div><dt>Người đặt</dt><dd>{form.name}</dd></div><div><dt>Điện thoại</dt><dd>{form.phone}</dd></div>{form.email && <div><dt>Email</dt><dd>{form.email}</dd></div>}<div><dt>Ngày tổ chức</dt><dd>{dateLabel(form.eventDate)}</dd></div><div><dt>Địa điểm</dt><dd>{form.location}</dd></div>{form.note && <div><dt>Ghi chú</dt><dd>{form.note}</dd></div>}</dl></section>
+      <section className="cx-panel cx-methods"><h2>Phương thức thanh toán</h2><label className={`cx-method ${method === "cash" ? "is-active" : ""}`}><input type="radio" name="payment_method" value="cash" checked={method === "cash"} disabled={sending} onChange={() => setMethod("cash")} /><FiDollarSign aria-hidden="true" /><span><strong>Thanh toán trực tiếp</strong><small>Trao đổi và thanh toán với nhân viên khi chốt dịch vụ.</small></span></label><label className={`cx-method ${method === "bank" ? "is-active" : ""}`}><input type="radio" name="payment_method" value="bank" checked={method === "bank"} disabled={sending} onChange={() => setMethod("bank")} /><FiCreditCard aria-hidden="true" /><span><strong>Chuyển khoản ngân hàng</strong><small>{bankConfigured ? "Hiển thị mã QR và thông tin tài khoản doanh nghiệp." : "Nhân viên sẽ cung cấp thông tin chuyển khoản khi tiếp nhận yêu cầu."}</small></span></label><p className="cx-inline-note">Chọn phương thức thanh toán chưa có nghĩa tiền đã được nhận. Trạng thái được cập nhật sau khi xác nhận giao dịch.</p></section>
+      {method === "bank" && <BankTransferCard total={cartTotal(items)} />}
+      <Link className="cx-back" to="/dathang" state={{ cartItems: items, bookingForm: form }}><FiArrowLeft aria-hidden="true" />Quay lại thông tin tổ chức</Link>
+    </div><OrderSummary items={items}>{error && <div className="cx-alert" role="alert">{error}<Link to="/donhang">Kiểm tra đơn hàng</Link></div>}<button className="cx-button cx-button--full" type="button" disabled={sending || !validCart(items)} onClick={submit}>{sending ? "Đang gửi yêu cầu…" : <>Gửi yêu cầu đặt dịch vụ <FiArrowRight aria-hidden="true" /></>}</button></OrderSummary></div>}
+  </CheckoutLayout>;
+}

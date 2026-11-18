@@ -12,6 +12,9 @@ class Order extends Model {
   public email!: string;
   public payment_method!: string;
   public payment_status!: string;
+  public customer_name!: string;
+  public event_date!: string;
+  public note!: string;
   public created_at!: Date;
   public updated_at!: Date;
 }
@@ -61,6 +64,9 @@ Order.init(
       type: DataTypes.ENUM('pending', 'paid', 'failed'),
       defaultValue: 'pending',
     },
+    customer_name: { type: DataTypes.STRING(255), allowNull: true },
+    event_date: { type: DataTypes.DATEONLY, allowNull: true },
+    note: { type: DataTypes.TEXT, allowNull: true },
     created_at: {
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,

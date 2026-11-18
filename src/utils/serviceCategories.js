@@ -1,0 +1,16 @@
+export const SERVICE_CATEGORIES = [
+    { id: 1, name: "Trang trí gia tiên" },
+    { id: 2, name: "Chụp ảnh cưới" },
+    { id: 3, name: "Thực đơn tiệc cưới" },
+    { id: 4, name: "Khác" },
+    { id: 5, name: "Trang trí tiệc cưới" },
+    { id: 6, name: "Quay phim cưới" },
+    { id: 7, name: "Mâm quả cưới hỏi" },
+    { id: 8, name: "Dịch vụ bê tráp" },
+    { id: 9, name: "Cho thuê khung rạp" },
+    { id: 10, name: "Âm thanh ánh sáng" },
+    { id: 11, name: "Trang phục cưới" },
+    { id: 12, name: "Xe hoa" },
+    { id: 13, name: "Thiệp cưới & quà cưới" },
+    { id: 14, name: "Trọn gói ngày cưới" },
+  ];

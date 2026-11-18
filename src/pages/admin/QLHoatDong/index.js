@@ -1,22 +1,10 @@
-import React, { useEffect, useMemo, useState } from "react";
-import axios from "axios";
+
+import { useEffect, useMemo, useState } from "react";
 import { apiClient, buildAuthHeaders } from "utils/apiClient";
-import { NavLink, useNavigate } from "react-router-dom";
+
 import { createPortal } from "react-dom";
-import { getAuthItem } from "utils/authStorage";
-import {
-  FaArrowLeft,
-  FaBell,
-  FaBox,
-  FaChartPie,
-  FaComments,
-  FaHistory,
-  FaRegCalendarAlt,
-  FaSearch,
-  FaShoppingCart,
-  FaUsers,
-  FaChevronDown,
-} from "react-icons/fa";
+
+import { FaSearch, FaChevronDown } from "react-icons/fa";
 import "./style.scss";
 
 const QLHoatDong = () => {
@@ -24,8 +12,8 @@ const QLHoatDong = () => {
   const [loading, setLoading] = useState(false);
   const [searchUserId, setSearchUserId] = useState("");
   const [selectedUserGroup, setSelectedUserGroup] = useState(null);
-  const navigate = useNavigate();
-  const role = getAuthItem("role");
+
+
 
   const normalizeText = (value) =>
     String(value || "")
@@ -113,59 +101,18 @@ const QLHoatDong = () => {
 
   return (
     <div className="admin-layout">
-      
+
       {/* SIDEBAR */}
-      <div className="sidebar">
-        <h2 className="logo">NGỌC THIỆN ADMIN</h2>
 
-        <nav>
-          <NavLink to="/dashboard">
-            <FaChartPie /> Tổng quan
-          </NavLink>
-
-          {role === "admin" && (
-            <NavLink to="/qlnguoidung">
-              <FaUsers /> Người dùng
-            </NavLink>
-          )}
-
-          <NavLink to="/qlsanpham">
-            <FaBox /> Dịch vụ
-          </NavLink>
-
-          <NavLink to="/qldonhang">
-            <FaShoppingCart /> Đơn hàng
-          </NavLink>
-
-          <NavLink to="/qltinnhan">
-            <FaComments /> Tin nhắn
-          </NavLink>
-
-          <NavLink to="/notification">
-            <FaBell /> Lịch tư vấn
-          </NavLink>
-
-          <NavLink to="/lichlamviec">
-            <FaRegCalendarAlt /> Lịch làm việc
-          </NavLink>
-
-          <NavLink to="/qlhoatdong">
-            <FaHistory /> Lịch sử
-          </NavLink>
-
-        </nav>
-      </div>
 
       {/* CONTENT */}
       <div className="main-content">
         <div className="page-header">
-          <h2>
+          <h1>
             <span className="icon">📊</span> Quản lý hoạt động
-          </h2>
+          </h1>
 
-          <button className="btn-back" onClick={() => navigate(-1)}>
-            <FaArrowLeft /> Quay lại
-          </button>
+
         </div>
 
         <div className="card">
@@ -273,7 +220,7 @@ const QLHoatDong = () => {
                   </div>
                 </div>
               </div>,
-              document.body
+              document.getElementById("nt-admin-main") || document.body
             )}
         </div>
       </div>

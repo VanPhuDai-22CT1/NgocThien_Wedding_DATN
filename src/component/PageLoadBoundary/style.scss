@@ -1,0 +1,35 @@
+.page-load-state {
+  min-height: 50vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 32px 20px;
+  text-align: center;
+  color: #742536;
+
+  p { margin: 0; }
+  button {
+    border: 0;
+    border-radius: 8px;
+    padding: 12px 20px;
+    background: #742536;
+    color: #fff;
+    cursor: pointer;
+  }
+}
+
+.page-load-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #ead6dc;
+  border-top-color: #742536;
+  border-radius: 50%;
+  animation: page-load-spin 0.8s linear infinite;
+}
+
+@keyframes page-load-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .page-load-spinner { animation: none; }
+}

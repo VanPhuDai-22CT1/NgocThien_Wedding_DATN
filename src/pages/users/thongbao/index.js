@@ -38,12 +38,11 @@ const Notification = () => {
   }, []);
 
   const fetchConsultations = useCallback(async () => {
+    if (!currentUserId) { setConsultations([]); setOrders([]); return; }
     try {
       setLoading(true);
-      const res = await fetch(
-        "/api/legacy?action=getConsultations"
-      );
-      const data = await res.json();
+      const res = await apiClient.get("/legacy", { params: { action: "getConsultations" } });
+      const data = res.data;
 
       if (data.success) {
         setConsultations(data.data);
@@ -202,16 +201,8 @@ const Notification = () => {
 
   const callApi = async (action, bodyData) => {
     try {
-      const res = await fetch(
-        `/api/legacy?action=${action}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(bodyData)
-        }
-      );
-
-      const data = await res.json();
+      const res = await apiClient.post("/legacy", { action, ...bodyData });
+      const data = res.data;
 
       if (data.success) {
         await fetchConsultations();

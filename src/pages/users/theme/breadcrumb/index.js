@@ -1,3 +1,4 @@
+import BrandWordmark from "component/BrandWordmark";
 import { memo } from "react";
 import "./style.scss";
 import { Link } from 'react-router-dom';
@@ -7,7 +8,7 @@ import { ROUTERS } from "utils/router";
 const Breadcrumb = (props) => {
     return <div className="breadcrumb">
         <div className="breadcrumb_text">
-          <h2>NGỌC THIỆN 👑 </h2>
+          <h2><BrandWordmark /></h2>
           
           <div className="breadcrumb__option">
             <ul>

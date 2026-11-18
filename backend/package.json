@@ -9,7 +9,7 @@
     "start": "node dist/server.js",
     "init-db": "node scripts/init_db.js",
     "watch": "tsc --watch",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node scripts/smoke-test.js"
   },
   "keywords": [],
   "author": "",

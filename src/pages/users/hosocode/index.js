@@ -1,19 +1,8 @@
-import React from "react";
-import { NavLink, useNavigate } from "react-router-dom";
-import { getAuthItem, logoutAuthSession } from "utils/authStorage";
-import {
-  FaArrowLeft,
-  FaBell,
-  FaBox,
-  FaChartPie,
-  FaCode,
-  FaComments,
-  FaHistory,
-  FaShoppingCart,
-  FaSignOutAlt,
-  FaUsers,
-  FaImage,
-} from "react-icons/fa";
+
+
+
+
+import { FaCode } from "react-icons/fa";
 import "./style.scss";
 
 const skillGroups = [
@@ -47,80 +36,25 @@ const projects = [
 ];
 
 const CoderProfilePage = () => {
-  const navigate = useNavigate();
-  const role = getAuthItem("role");
 
-  const logout = () => {
-    logoutAuthSession("/");
-  };
+
+
+
 
   return (
     <div className="admin-layout coder-admin-layout">
-      <aside className="sidebar">
-        <div className="logo">
-          <h1>NGOC THIEN</h1>
-          <p>Wedding Admin</p>
-        </div>
 
-        <nav className="sidebar-nav">
-          <NavLink to="/dashboard">
-            <FaChartPie /> Tổng quan
-          </NavLink>
-
-          {role === "admin" && (
-            <NavLink to="/qlnguoidung">
-              <FaUsers /> Người dùng
-            </NavLink>
-          )}
-
-          <NavLink to="/qlsanpham">
-            <FaBox /> Dịch vụ
-          </NavLink>
-
-          <NavLink to="/qlhinhanh">
-            <FaImage /> Ảnh trang chủ
-          </NavLink>
-
-          <NavLink to="/qldonhang">
-            <FaShoppingCart /> Đơn hàng
-          </NavLink>
-
-          <NavLink to="/qltinnhan">
-            <FaComments /> Tin nhắn
-          </NavLink>
-
-          <NavLink to="/notification">
-            <FaBell /> Lịch tư vấn
-          </NavLink>
-
-          <NavLink to="/qlhoatdong">
-            <FaHistory /> Lịch sử
-          </NavLink>
-
-          <NavLink to="/admin/ho-so-nguoi-code" className="active">
-            <FaCode /> Hồ sơ người code
-          </NavLink>
-        </nav>
-
-        <div className="sidebar-footer">
-          <button type="button" onClick={logout} className="logout-btn">
-            <FaSignOutAlt /> Đăng xuất
-          </button>
-        </div>
-      </aside>
 
       <main className="admin-content">
         <div className="admin-header">
           <div>
-            <h2>
+            <h1>
               <FaCode /> Hồ sơ người code
-            </h2>
+            </h1>
             <p className="subtitle">Thông tin giới thiệu người phát triển hệ thống.</p>
           </div>
 
-          <button type="button" className="btn-back" onClick={() => navigate("/dashboard")}>
-            <FaArrowLeft /> Quay lại Dashboard
-          </button>
+
         </div>
 
         <section className="coder-profile-page">

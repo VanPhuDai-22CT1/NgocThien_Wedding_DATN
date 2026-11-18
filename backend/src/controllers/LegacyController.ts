@@ -3,6 +3,7 @@ import Joi from 'joi';
 import { Op } from 'sequelize';
 import jwt from 'jsonwebtoken';
 import { sendPasswordResetOtp } from '../utils/mailer';
+import ConsultationController from './ConsultationController';
 import {
   Consultation,
   LiveChatMessage,
@@ -65,28 +66,28 @@ class LegacyController {
     return '';
   }
 
-  private stripUnsafeText(value: string): string {
-    return value
+  private stripUnsafeText(value: string, preserveLines = false): string {
+    return (preserveLines ? value.replace(/\r\n?/g, '\n') : value)
       .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
       .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, '')
       .replace(/<[^>]*>/g, '')
-      .replace(/[\u0000-\u001F\u007F]/g, '')
+      .replace(preserveLines ? /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g : /[\u0000-\u001F\u007F]/g, '')
       .trim();
   }
 
-  private sanitizePayload(payload: any): any {
+  private sanitizePayload(payload: any, action = ''): any {
     if (!payload || typeof payload !== 'object') return payload;
 
     return Object.fromEntries(
       Object.entries(payload).map(([key, value]) => [
         key,
-        typeof value === 'string' ? this.stripUnsafeText(value) : value,
+        typeof value === 'string' ? this.stripUnsafeText(value, action === 'sendLiveChatMessage' && key === 'message') : value,
       ])
     );
   }
 
   private validateLegacyPayload(action: string, req: Request): string | null {
-    req.body = this.sanitizePayload(req.body);
+    req.body = this.sanitizePayload(req.body, action);
 
     const body = req.body as any;
     const id = Joi.alternatives().try(Joi.number().integer().positive(), Joi.string().trim().max(32));
@@ -218,151 +219,110 @@ class LegacyController {
         'getDashboardStats',
         'getUpcomingEvents',
         'exportStatistics',
-        'deleteConsultation',
-        'updateConsultation',
       ]);
-      const localAdminProductActions = new Set(['addProduct', 'updateProduct', 'deleteProduct']);
-
-      if (localAdminProductActions.has(action)) {
-        const authHeader = req.headers.authorization || '';
-        const token = authHeader.split(' ')[1];
-        const source = req.get('origin') || req.get('referer') || '';
-        let origin = '';
-        try {
-          origin = source ? new URL(source).origin : '';
-        } catch {
-          origin = '';
-        }
-        const isLocalAdminOrigin = ['http://localhost:3001', 'http://127.0.0.1:3001'].includes(origin);
-
-        if (isLocalAdminOrigin) {
-          // Local admin dev server can manage services even if an old browser session has a stale token.
-        } else if (token && process.env.JWT_SECRET) {
-          try {
-            const decoded: any = jwt.verify(token, process.env.JWT_SECRET as string);
-            if (decoded?.role !== 'admin') {
-              return res.status(403).json({ success: false, message: 'Admin access required' });
-            }
-            (req as any).user = decoded;
-          } catch (err: any) {
-            return res.status(401).json({ success: false, message: 'Invalid token' });
-          }
-        } else {
-          console.warn(`Legacy product admin action denied: no token. action=${action}, ip=${req.ip || req.socket.remoteAddress}`);
-          return res.status(401).json({ success: false, message: 'No token provided' });
-        }
-      }
-
-      if (adminActions.has(action)) {
-        const authHeader = req.headers.authorization || '';
-        const token = authHeader.split(' ')[1];
-        if (!token) {
-          console.warn(`Legacy admin action denied: no token. action=${action}, ip=${req.ip || req.socket.remoteAddress}`);
-          return res.status(401).json({ success: false, message: 'No token provided' });
-        }
-
-        if (!process.env.JWT_SECRET) {
-          console.error('JWT_SECRET missing in environment');
-          return res.status(500).json({ success: false, message: 'Server misconfiguration: JWT_SECRET missing' });
-        }
-
+      ['addProduct', 'updateProduct', 'deleteProduct',
+        'updateConsultationStatus', 'markConsultationAsRead', 'getLiveChatSessions',
+        'markLiveChatRead', 'getAdminAiSuggestions'].forEach((name) => adminActions.add(name));
+      const userActions = new Set(['getConsultations', 'deleteConsultation', 'updateConsultation', 'getUser', 'getOrder', 'getOrdersByUser', 'updateUserInfo', 'addToCart', 'getCart', 'removeFromCart']);
+      const adminMessage = action === 'sendLiveChatMessage' && (req.body?.sender === 'admin' || req.body?.sender_type === 'admin');
+      if (adminActions.has(action) || userActions.has(action) || adminMessage) {
+        const token = req.headers.authorization?.split(' ')[1];
+        if (!token) return res.status(401).json({ success: false, message: 'No token provided' });
         try {
           const decoded: any = jwt.verify(token, process.env.JWT_SECRET as string);
-          const authUserId = decoded?.id || decoded?.user_id;
-          const authUser = authUserId ? await User.findByPk(authUserId) : null;
-          if (!authUser || authUser.role !== 'admin') {
-            console.warn(`Legacy admin action forbidden: insufficient role. action=${action}, role=${authUser?.role || decoded?.role}, userId=${authUserId}`);
+          const user = await User.findByPk(decoded.id || decoded.user_id);
+          if (!user || !user.is_active) return res.status(401).json({ success: false, message: 'Invalid token' });
+          if ((adminActions.has(action) || adminMessage) && user.role !== 'admin') {
             return res.status(403).json({ success: false, message: 'Admin access required' });
           }
-          // attach user to request for downstream handlers if needed
-          (req as any).user = {
-            id: authUser.id,
-            username: authUser.username,
-            email: authUser.email,
-            role: authUser.role,
-          };
-        } catch (err: any) {
-          console.warn(`Legacy admin action token invalid: action=${action}, error=${err?.message}`);
+          (req as any).user = { id: user.id, username: user.username, email: user.email, role: user.role };
+          if (userActions.has(action) && user.role !== 'admin') {
+            const target = req.body?.user_id ?? req.query.user_id ?? req.body?.userId ?? req.body?.userid ?? req.query.userid;
+            if (target !== undefined && Number(target) !== user.id) {
+              return res.status(403).json({ success: false, message: 'Forbidden' });
+            }
+          }
+        } catch (_error) {
           return res.status(401).json({ success: false, message: 'Invalid token' });
         }
       }
 
       switch (action) {
         case 'getProducts':
-          return this.getProducts(req, res);
+          return await this.getProducts(req, res);
         case 'addProduct':
-          return this.addProduct(req, res);
+          return await this.addProduct(req, res);
         case 'updateProduct':
-          return this.updateProduct(req, res);
+          return await this.updateProduct(req, res);
         case 'deleteProduct':
-          return this.deleteProduct(req, res);
+          return await this.deleteProduct(req, res);
         case 'getConsultations':
-          return this.getConsultations(req, res);
+          return await this.getConsultations(req, res);
         case 'updateConsultationStatus':
-          return this.updateConsultationStatus(req, res);
+          return await this.updateConsultationStatus(req, res);
         case 'markConsultationAsRead':
-          return this.markConsultationAsRead(req, res);
+          return await this.markConsultationAsRead(req, res);
         case 'getBookedEventDates':
-          return this.getBookedEventDates(req, res);
+          return await this.getBookedEventDates(req, res);
         case 'addConsultation':
-          return this.addConsultation(req, res);
+          return await this.addConsultation(req, res);
         case 'getLiveChatSessions':
-          return this.getLiveChatSessions(req, res);
+          return await this.getLiveChatSessions(req, res);
         case 'getLiveChatMessages':
-          return this.getLiveChatMessages(req, res);
+          return await this.getLiveChatMessages(req, res);
         case 'sendLiveChatMessage':
-          return this.sendLiveChatMessage(req, res);
+          return await this.sendLiveChatMessage(req, res);
         case 'markLiveChatRead':
-          return this.markLiveChatRead(req, res);
+          return await this.markLiveChatRead(req, res);
         case 'getOrders':
-          return this.getOrders(req, res);
+          return await this.getOrders(req, res);
         case 'updateStatus':
-          return this.updateStatus(req, res);
+          return await this.updateStatus(req, res);
         case 'deleteOrder':
-          return this.deleteOrder(req, res);
+          return await this.deleteOrder(req, res);
         case 'getDashboardStats':
-          return this.getDashboardStats(req, res);
+          return await this.getDashboardStats(req, res);
         case 'getUpcomingEvents':
-          return this.getUpcomingEvents(req, res);
+          return await this.getUpcomingEvents(req, res);
         case 'exportStatistics':
-          return this.exportStatistics(req, res);
+          return await this.exportStatistics(req, res);
         case 'getAdminAiSuggestions':
         case 'getAiRecommendations':
-          return this.getAiRecommendations(req, res);
+          return await this.getAiRecommendations(req, res);
         case 'getUsers':
-          return this.getUsers(req, res);
+          return await this.getUsers(req, res);
         case 'deleteUser':
-          return this.deleteUser(req, res);
+          return await this.deleteUser(req, res);
         case 'updateUserRole':
-          return this.updateUserRole(req, res);
+          return await this.updateUserRole(req, res);
         case 'updateUserInfo':
-          return this.updateUserInfo(req, res);
+          return await this.updateUserInfo(req, res);
         case 'forgotPassword':
-          return this.forgotPassword(req, res);
+          return await this.forgotPassword(req, res);
         case 'verifyOtp':
-          return this.verifyOtp(req, res);
+          return await this.verifyOtp(req, res);
         case 'reset_password':
-          return this.resetPassword(req, res);
+          return await this.resetPassword(req, res);
         case 'getActivityLogs':
-          return this.getActivityLogs(req, res);
+          return await this.getActivityLogs(req, res);
         case 'saveChatbotMessage':
           return res.json({ success: true, message: 'Saved' });
         case 'getUser':
-          return this.getUser(req, res);
+          return await this.getUser(req, res);
         case 'getOrder':
-          return this.getOrder(req, res);
+          return await this.getOrder(req, res);
         case 'getOrdersByUser':
-          return this.getOrdersByUser(req, res);
+          return await this.getOrdersByUser(req, res);
         case 'deleteConsultation':
-          return this.deleteConsultation(req, res);
+          return await this.deleteConsultation(req, res);
         case 'updateConsultation':
-          return this.updateConsultation(req, res);
+          return await this.updateConsultation(req, res);
         case 'addToCart':
-          return this.addToCart(req, res);
+          return await this.addToCart(req, res);
         case 'getCart':
-          return this.getCart(req, res);
+          return await this.getCart(req, res);
         case 'removeFromCart':
-          return this.removeFromCart(req, res);
+          return await this.removeFromCart(req, res);
         default:
           return res.status(400).json({ success: false, message: `Unsupported action: ${action}` });
       }
@@ -508,7 +468,9 @@ class LegacyController {
   }
 
   private async getConsultations(req: Request, res: Response) {
-    const rows = await Consultation.findAll({ order: [['created_at', 'DESC']] });
+    const user = (req as any).user;
+    const where = user.role === 'admin' ? {} : { [Op.or]: [{ user_id: user.id }, { email: user.email }] };
+    const rows = await Consultation.findAll({ where, order: [['created_at', 'DESC']] });
     return res.json({ success: true, data: rows });
   }
 
@@ -517,7 +479,11 @@ class LegacyController {
     const status = (req.body as any).status;
     const row = await Consultation.findByPk(id as any);
     if (!row) return res.status(404).json({ success: false, message: 'Consultation not found' });
-    await row.update({ status: this.normalizeStatus(status) });
+    const requestedStatus = String(status || '').trim().toLowerCase();
+    const normalized = ['pending', 'confirmed'].includes(requestedStatus) ? requestedStatus : this.normalizeStatus(status);
+    const consultationStatus = ({ shipping: 'delivering', delivered: 'completed' } as Record<string, string>)[normalized] || normalized;
+    if (!['pending', 'confirmed', 'processing', 'delivering', 'completed', 'cancelled'].includes(consultationStatus)) return res.status(400).json({ success: false, message: 'Invalid status' });
+    await row.update({ status: consultationStatus, updated_at: new Date() });
     return res.json({ success: true, data: row });
   }
 
@@ -530,24 +496,22 @@ class LegacyController {
   }
 
   private async getBookedEventDates(req: Request, res: Response) {
-    const rows = await Consultation.findAll({
-      where: {
-        event_date: { [Op.ne]: null },
-        status: { [Op.in]: ['confirmed', 'processing', 'shipping', 'delivering', 'completed'] },
-      },
-      attributes: ['event_date'],
-      order: [['event_date', 'ASC']],
-    });
-
-    return res.json({
-      success: true,
-      data: rows.map((item) => ({ event_date: (item.event_date as any)?.toISOString?.().split('T')[0] })),
-    });
+    return ConsultationController.getBookedEventDates(req, res);
   }
 
   private async addConsultation(req: Request, res: Response) {
+    let userId: number | null = null;
+    const token = req.headers.authorization?.split(' ')[1];
+    if (token) {
+      try {
+        const decoded: any = jwt.verify(token, process.env.JWT_SECRET as string);
+        const user = await User.findByPk(decoded.id || decoded.user_id);
+        if (!user || !user.is_active) return res.status(401).json({ success: false, message: 'Invalid token' });
+        userId = user.id;
+      } catch (_error) { return res.status(401).json({ success: false, message: 'Invalid token' }); }
+    }
     const row = await Consultation.create({
-      user_id: (req.body as any).user_id || null,
+      user_id: userId,
       name: (req.body as any).name || '',
       email: (req.body as any).email || '',
       phone: (req.body as any).phone || '',
@@ -582,13 +546,13 @@ class LegacyController {
   }
 
   private async getLiveChatMessages(req: Request, res: Response) {
-    const chat_session = (req.query.chat_session as string) || (req.body as any).chat_session;
+    const chat_session = (req.query.chat_session as string) || (req.body as any)?.chat_session;
     const rows = await LiveChatMessage.findAll({ where: { chat_session }, order: [['created_at', 'ASC']] });
     return res.json({ success: true, data: rows });
   }
 
   private async sendLiveChatMessage(req: Request, res: Response) {
-    const chat_session = (req.body as any).chat_session;
+    const chat_session = (req.body as any)?.chat_session;
     const sender = (req.body as any).sender || (req.body as any).sender_type || 'customer';
     const message = (req.body as any).message || '';
     const sender_name = (req.body as any).customer_name || (req.body as any).sender_name || 'Guest';
@@ -621,7 +585,7 @@ class LegacyController {
   }
 
   private async markLiveChatRead(req: Request, res: Response) {
-    const chat_session = (req.body as any).chat_session;
+    const chat_session = (req.body as any)?.chat_session;
     const row = await LiveChatSession.findOne({ where: { chat_session } });
     if (!row) return res.status(404).json({ success: false, message: 'Session not found' });
     await row.update({ is_read_by_admin: true });
@@ -632,13 +596,18 @@ class LegacyController {
     const rows = await Order.findAll({ include: [{ model: OrderItem, include: [Product] }], order: [['created_at', 'DESC']] });
     const orders = rows.map((order: any) => ({
       order_id: order.id,
+      order_code: order.order_code,
       total: Number(order.total_amount || 0),
       status: order.status,
       created_at: order.created_at,
       updated_at: order.updated_at,
       customer_name: order.customer_name || '',
+      email: order.email || '',
+      event_date: order.event_date || null,
+      delivery_address: order.delivery_address || '',
       phone: order.phone || '',
       payment_method: order.payment_method || '',
+      payment_status: order.payment_status || 'pending',
       note: order.note || '',
       details: (order.OrderItems || []).map((item: any) => ({
         product_name: item.Product?.name || '',
@@ -652,10 +621,12 @@ class LegacyController {
 
   private async updateStatus(req: Request, res: Response) {
     const orderId = (req.body as any).order_id;
-    const status = this.normalizeStatus((req.body as any).status);
+    const requestedStatus = String((req.body as any).status || '').trim().toLowerCase();
+    const status = ['pending', 'confirmed'].includes(requestedStatus) ? requestedStatus : this.normalizeStatus(requestedStatus);
     const row = await Order.findByPk(orderId as any);
     if (!row) return res.status(404).json({ success: false, message: 'Order not found' });
-    await row.update({ status });
+    if (!['pending', 'confirmed', 'processing', 'shipping', 'delivered', 'cancelled'].includes(status)) return res.status(400).json({ success: false, message: 'Invalid status' });
+    await row.update({ status, updated_at: new Date() });
     return res.json({ success: true });
   }
 
@@ -667,26 +638,39 @@ class LegacyController {
   }
 
   private async getDashboardStats(req: Request, res: Response) {
-    const [totalUsers, totalProducts, totalOrders] = await Promise.all([
+    const [totalUsers, totalCustomers, totalProducts, totalConsultations] = await Promise.all([
       User.count(),
+      User.count({ where: { role: 'user' } }),
       Product.count(),
-      Order.count(),
+      Consultation.count(),
     ]);
 
     const orders = await Order.findAll();
-    const totalRevenue = orders.reduce((sum, order: any) => sum + Number(order.total_amount || 0), 0);
+    const totalOrders = orders.length;
+    const recognizedOrders = orders.filter((order: any) => order.status !== 'cancelled' && (order.status === 'delivered' || order.payment_status === 'paid'));
+    const totalRevenue = recognizedOrders.reduce((sum, order: any) => sum + Number(order.total_amount || 0), 0);
+    const now = new Date();
+    const monthDates = Array.from({ length: 12 }, (_, index) => new Date(now.getFullYear(), now.getMonth() - 11 + index, 1));
+    const months = monthDates.map((date) => `${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`);
+    const monthlyRevenue = monthDates.map((month) => recognizedOrders.filter((order: any) => {
+      const date = new Date(order.created_at);
+      return date.getFullYear() === month.getFullYear() && date.getMonth() === month.getMonth();
+    }).reduce((sum, order: any) => sum + Number(order.total_amount || 0), 0));
     const completedOrders = orders.filter((item: any) => ['delivered', 'completed'].includes(String(item.status))).length;
     const pendingOrders = orders.filter((item: any) => ['pending', 'processing', 'confirmed', 'shipping'].includes(String(item.status))).length;
     const cancelledOrders = orders.filter((item: any) => String(item.status) === 'cancelled').length;
     const onlineOrders = orders.filter((item: any) => ['bank', 'online', 'transfer'].includes(String(item.payment_method || '').toLowerCase()));
-    const onlinePaymentRevenue = onlineOrders.reduce((sum, order: any) => sum + Number(order.total_amount || 0), 0);
+    const onlinePaymentRevenue = onlineOrders.filter((order: any) => order.payment_status === 'paid' && order.status !== 'cancelled').reduce((sum, order: any) => sum + Number(order.total_amount || 0), 0);
     const onlinePaymentRate = totalOrders > 0 ? Math.round((onlineOrders.length / totalOrders) * 100) : 0;
 
     return res.json({
       success: true,
       total_users: totalUsers,
+      total_customers: totalCustomers,
       total_products: totalProducts,
       total_orders: totalOrders,
+      total_consultations: totalConsultations,
+      generated_at: new Date().toISOString(),
       total_revenue: totalRevenue,
       online_payments: onlineOrders.length,
       online_payment_revenue: onlinePaymentRevenue,
@@ -694,8 +678,8 @@ class LegacyController {
       completed_orders: completedOrders,
       pending_orders: pendingOrders,
       cancelled_orders: cancelledOrders,
-      months: [],
-      monthly_revenue: [],
+      months,
+      monthly_revenue: monthlyRevenue,
     });
   }
 
@@ -779,7 +763,7 @@ class LegacyController {
   }
 
   private async getAiRecommendations(req: Request, res: Response) {
-    const limit = Number((req.query.limit as string) || (req.body as any).limit || 4);
+    const limit = Number((req.query.limit as string) || (req.body as any)?.limit || 4);
     const rows = await Product.findAll({ order: [['average_rating', 'DESC'], ['review_count', 'DESC']], limit });
     return res.json({ success: true, data: rows });
   }
@@ -1006,7 +990,7 @@ class LegacyController {
   }
 
   private async getUser(req: Request, res: Response) {
-    const user_id = (req.body as any).user_id || req.query.user_id;
+    const user_id = (req.body as any)?.user_id || req.query.user_id || (req as any).user.id;
     const row = await User.findByPk(user_id as any, { attributes: { exclude: ['password'] } });
     if (!row) return res.status(404).json({ success: false, message: 'User not found' });
     return res.json({ success: true, data: row });
@@ -1016,6 +1000,7 @@ class LegacyController {
     const id = req.query.id as string;
     const order: any = await Order.findByPk(id as any, { include: [{ model: OrderItem, include: [Product] }] });
     if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
+    if ((req as any).user.role !== 'admin' && order.user_id !== (req as any).user.id) return res.status(403).json({ success: false, message: 'Forbidden' });
 
     return res.json({
       success: true,
@@ -1038,7 +1023,7 @@ class LegacyController {
   }
 
   private async getOrdersByUser(req: Request, res: Response) {
-    const user_id = (req.query.user_id as string) || (req.body as any).user_id;
+    const user_id = (req.query.user_id as string) || (req.body as any)?.user_id || (req as any).user.id;
     const rows = await Order.findAll({
       where: { user_id },
       include: [{ model: OrderItem, include: [Product] }],
@@ -1067,7 +1052,11 @@ class LegacyController {
 
   private async deleteConsultation(req: Request, res: Response) {
     const id = (req.body as any).id;
-    await Consultation.destroy({ where: { id } });
+    const row = await Consultation.findByPk(id);
+    if (!row) return res.status(404).json({ success: false, message: 'Consultation not found' });
+    const user = (req as any).user;
+    if (user.role !== 'admin' && row.user_id !== user.id && row.email.toLowerCase() !== user.email.toLowerCase()) return res.status(403).json({ success: false, message: 'Forbidden' });
+    await row.update({ status: 'cancelled', updated_at: new Date() });
     return res.json({ success: true });
   }
 
@@ -1075,6 +1064,8 @@ class LegacyController {
     const id = (req.body as any).id;
     const row = await Consultation.findByPk(id as any);
     if (!row) return res.status(404).json({ success: false, message: 'Consultation not found' });
+    const user = (req as any).user;
+    if (user.role !== 'admin' && row.user_id !== user.id && row.email.toLowerCase() !== user.email.toLowerCase()) return res.status(403).json({ success: false, message: 'Forbidden' });
 
     await row.update({
       name: (req.body as any).name ?? row.name,
@@ -1118,7 +1109,10 @@ class LegacyController {
 
   private async removeFromCart(req: Request, res: Response) {
     const id = Number((req.body as any).cartItemId || 0);
-    await ShoppingCart.destroy({ where: { id } });
+    const row = await ShoppingCart.findByPk(id);
+    if (!row) return res.status(404).json({ success: false, message: 'Cart item not found' });
+    if ((req as any).user.role !== 'admin' && row.user_id !== (req as any).user.id) return res.status(403).json({ success: false, message: 'Forbidden' });
+    await row.destroy();
     return res.json({ success: true });
   }
 }

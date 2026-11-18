@@ -1,64 +1,39 @@
-import React, { useEffect } from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
+import React, { lazy, Suspense, useEffect } from "react";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { ROUTERS } from "./utils/router";
 import { getAuthItem, getAuthSession } from "utils/authStorage";
-import MasterLayout from "./pages/users/theme/masterLayuot";
+import PageLoadBoundary, { PageLoading } from "./component/PageLoadBoundary";
+import AdminShell from "./component/AdminShell";
+const MasterLayout = lazy(() => import("./pages/users/theme/masterLayuot"));
 
 // ===== USER =====
-import Homepage from "./pages/users/trangchu";
-import DangNhap from "./pages/users/dangnhap";
-import DangKy from "./pages/users/dangky";
-import QuenMatKhau from "./pages/users/quenmatkhau";
-import DatLaiMatKhau from "./pages/users/datlaimatkhau";
-import ProductsPage from "./pages/users/sanpham";
-import ProductDetailPage from "./pages/users/chitietsanpham";
-import GioHang from "./pages/users/giohang";
-import TrangThongTin from "./pages/users/trangthongtin";
-import GioiThieu from "./pages/users/gioithieu";
-import DatHang from "./pages/users/dathang";
-import DonHang from "./pages/users/donhang";
-import ThongBao from "./pages/users/thongbao";
-import ThanhToan from "./pages/users/thanhtoan";
-import HoaDon from "./pages/users/hoadon";
-import CoderProfilePage from "./pages/users/hosocode";
+const Homepage = lazy(() => import("./pages/users/trangchu"));
+const DangNhap = lazy(() => import("./pages/users/dangnhap"));
+const DangKy = lazy(() => import("./pages/users/dangky"));
+const QuenMatKhau = lazy(() => import("./pages/users/quenmatkhau"));
+const DatLaiMatKhau = lazy(() => import("./pages/users/datlaimatkhau"));
+const ProductsPage = lazy(() => import("./pages/users/sanpham"));
+const ProductDetailPage = lazy(() => import("./pages/users/chitietsanpham"));
+const GioHang = lazy(() => import("./pages/users/giohang"));
+const TrangThongTin = lazy(() => import("./pages/users/trangthongtin"));
+const GioiThieu = lazy(() => import("./pages/users/gioithieu"));
+const DatHang = lazy(() => import("./pages/users/dathang"));
+const DonHang = lazy(() => import("./pages/users/donhang"));
+const ThongBao = lazy(() => import("./pages/users/thongbao"));
+const ThanhToan = lazy(() => import("./pages/users/thanhtoan"));
+const HoaDon = lazy(() => import("./pages/users/hoadon"));
+const CoderProfilePage = lazy(() => import("./pages/users/hosocode"));
 
 // ===== ADMIN =====
-import Dashboard from "./pages/admin/dashboard";
-import OrderManagement from "./pages/admin/qldonhang";
-import UserList from "./pages/admin/qlnguoidung";
-import ProductManagement from "./pages/admin/qlsanpham";
-import HomeImageManagement from "./pages/admin/qlhinhanh";
-import QLHoatDong from "./pages/admin/QLHoatDong";
-import Notification from "./pages/admin/thongbaoad";
-import AdminChat from "./pages/admin/adminchat";
-import WorkScheduleManagement from "./pages/admin/lichlamviec";
-
-const UserWheelScrollBridge = ({ children }) => {
-  useEffect(() => {
-    const handleWheel = (e) => {
-      if (e.ctrlKey) return;
-
-      const deltaY =
-        e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
-
-      e.preventDefault();
-      window.scrollBy({ top: deltaY, behavior: "auto" });
-    };
-
-    window.addEventListener("wheel", handleWheel, {
-      passive: false,
-      capture: true,
-    });
-
-    return () => {
-      window.removeEventListener("wheel", handleWheel, {
-        capture: true,
-      });
-    };
-  }, []);
-
-  return <>{children}</>;
-};
+const Dashboard = lazy(() => import("./pages/admin/dashboard"));
+const OrderManagement = lazy(() => import("./pages/admin/qldonhang"));
+const UserList = lazy(() => import("./pages/admin/qlnguoidung"));
+const ProductManagement = lazy(() => import("./pages/admin/qlsanpham"));
+const HomeImageManagement = lazy(() => import("./pages/admin/qlhinhanh"));
+const QLHoatDong = lazy(() => import("./pages/admin/QLHoatDong"));
+const Notification = lazy(() => import("./pages/admin/thongbaoad"));
+const AdminChat = lazy(() => import("./pages/admin/adminchat"));
+const WorkScheduleManagement = lazy(() => import("./pages/admin/lichlamviec"));
 
 const isAdminHost =
   process.env.REACT_APP_APP_MODE === "admin" ||
@@ -106,10 +81,18 @@ const AdminLanding = () => {
     return null;
   }
 
-  return role === "admin" ? <Dashboard /> : <DangNhap />;
+  return role === "admin" ? <Navigate to="/dashboard" replace /> : <DangNhap />;
+};
+
+const RequireAdmin = ({ children }) => {
+  if (!getAuthItem("token") || getAuthItem("role") !== "admin") {
+    return <Navigate to="/login" replace />;
+  }
+  return children;
 };
 
 const RouterCustom = () => {
+  const { pathname } = useLocation();
   const userRouters = [
     { path: ROUTERS.USER.HOME, element: <UserLanding /> },
     { path: ROUTERS.USER.LOGIN, element: <DangNhap /> },
@@ -166,6 +149,8 @@ const RouterCustom = () => {
   };
 
   return (
+    <PageLoadBoundary key={pathname}>
+      <Suspense fallback={<PageLoading />}>
     <Routes>
       {activeRouters.map((item, index) => (
         <Route
@@ -173,11 +158,11 @@ const RouterCustom = () => {
           path={item.path}
           element={
             isAdminHost ? (
-              item.element
+              item.path === "/login" || item.path === "/" ? item.element : <RequireAdmin><AdminShell><Suspense fallback={<PageLoading />}>{item.element}</Suspense></AdminShell></RequireAdmin>
             ) : (
-              <UserWheelScrollBridge>
+              <>
                 {renderRouteElement(item)}
-              </UserWheelScrollBridge>
+              </>
             )
           }
         />
@@ -185,6 +170,8 @@ const RouterCustom = () => {
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+      </Suspense>
+    </PageLoadBoundary>
   );
 };
 

@@ -1,11 +1,12 @@
+@use "../../../../style/buttons" as buttons;
 /* ================= RESET ================= */
 /* ================= THEME PINK ================= */
-$pink-dark: #ad1457;
-$pink-main: #d81b60;
-$pink-light: #ec407a;
-$pink-soft: #fff1f6;
-$pink-shadow: rgba(216, 27, 96, 0.35);
-$pink-focus: rgba(216, 27, 96, 0.25);
+$pink-dark: #8f1220;
+$pink-main: #b31d2b;
+$pink-light: #d94349;
+$pink-soft: #fff2ef;
+$pink-shadow: rgba(179, 29, 43, 0.35);
+$pink-focus: rgba(179, 29, 43, 0.25);
 
 *,
 *::before,
@@ -68,6 +69,7 @@ ul {
 }
 
 /* ================= HEADER MAIN ================= */
+.header__mobile-toggle { display: none; }
 .header__main {
   background: #fff;
   border-bottom: 1px solid #eee;
@@ -76,13 +78,30 @@ ul {
   z-index: 100;
 
   &-inner {
-    max-width: 1400px;
+    max-width: 1560px;
     margin: auto;
-    padding: 20px 28px;
-    display: flex;
+    padding: 20px 32px;
+    min-height: 96px;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) 280px;
+    gap: 32px;
     align-items: center;
-    justify-content: space-between;
   }
+  &, & * { font-family: "Be Vietnam Pro", "Segoe UI", sans-serif; }
+}
+.header__main .header__menu { justify-self: center; min-width: 0; }
+.header__main .header__menu > ul { align-items: center; gap: 24px; white-space: nowrap; }
+.header__main .header__menu > ul > li > a { font-size: 15px; font-weight: 500; line-height: 1.5; }
+.header__main .header__menu a[aria-current="page"] { color: #a91c25; }
+
+.header__actions { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.header__main .header__actions .header__search { flex: 1; min-width: 0; }
+.header__notification {
+  display: inline-flex; align-items: center; justify-content: center; flex: 0 0 44px; width: 44px; height: 44px;
+  border: 1px solid #e9d8cf; border-radius: 50%; background: #fffaf5; color: #982332; font-size: 17px;
+  transition: background .2s ease, border-color .2s ease;
+  &:hover, &[aria-current="page"] { background: #f8eae4; border-color: #ba7d7a; }
+  &:focus-visible { outline: 2px solid #a21e2e; outline-offset: 3px; }
 }
 
 /* ================= MENU ================= */
@@ -211,6 +230,9 @@ ul {
   border-radius: 999px;
   overflow: hidden;
   background: #fafafa;
+  width: 100%;
+  min-width: 0;
+  height: 44px;
   transition: box-shadow 0.3s ease;
 
   &:focus-within {
@@ -221,15 +243,24 @@ ul {
     border: none;
     padding: 12px 18px;
     outline: none;
-    min-width: 220px;
+    min-width: 0;
+    width: 100%;
+    flex: 1;
+    height: 100%;
+    font-size: 12px;
     background: transparent;
   }
 
   button {
-    background: linear-gradient(135deg, #7b1e1e, #b02a2a);
+    background: #9e2328;
     color: #fff;
     border: none;
-    padding: 0 22px;
+    padding: 0;
+    width: 54px;
+    flex: 0 0 54px;
+    display: grid;
+    place-items: center;
+    svg { width: 14px; height: 14px; }
     cursor: pointer;
     transition: opacity 0.25s ease;
 
@@ -353,10 +384,13 @@ ul {
   text-shadow: 0 4px 14px rgba(176, 42, 42, 0.45);
 }
 .header__logo {
+  font-family: "Playfair Display", Georgia, serif;
   font-size: 28px;
-  font-weight: 800;
-  letter-spacing: 1.5px;
-  color: #b80b0b; // đen than – sáng, không gắt
+  font-weight: 700;
+  letter-spacing: .045em;
+  line-height: 1.4;
+  white-space: nowrap;
+  color: #a51d2d;
   margin: 0;
   cursor: pointer;
   transition: all 0.3s ease;
@@ -435,10 +469,10 @@ ul {
   border-radius: 14px;
   background: linear-gradient(
     to left,
-    hsl(340deg 100% 16%) 0%,
-    hsl(340deg 100% 32%) 8%,
-    hsl(340deg 100% 32%) 92%,
-    hsl(340deg 100% 16%) 100%
+    hsl(355deg 100% 16%) 0%,
+    hsl(355deg 100% 32%) 8%,
+    hsl(355deg 100% 32%) 92%,
+    hsl(355deg 100% 16%) 100%
   );
 }
 
@@ -449,7 +483,7 @@ ul {
   font-size: 1.1rem;
   font-weight: 700;
   color: #fff;
-  background: hsl(345deg 100% 47%);
+  background: hsl(355deg 100% 47%);
   transform: translateY(-5px);
   transition: transform 600ms cubic-bezier(.3, .7, .4, 1);
 }
@@ -513,10 +547,10 @@ button {
  border-radius: 12px;
  background: linear-gradient(
     to left,
-    hsl(340deg 100% 16%) 0%,
-    hsl(340deg 100% 32%) 8%,
-    hsl(340deg 100% 32%) 92%,
-    hsl(340deg 100% 16%) 100%
+    hsl(355deg 100% 16%) 0%,
+    hsl(355deg 100% 32%) 8%,
+    hsl(355deg 100% 32%) 92%,
+    hsl(355deg 100% 16%) 100%
   );
 }
 
@@ -527,7 +561,7 @@ button {
  border-radius: 12px;
  font-size: 1.1rem;
  color: white;
- background: hsl(345deg 100% 47%);
+ background: hsl(355deg 100% 47%);
  will-change: transform;
  transform: translateY(-4px);
  transition: transform
@@ -647,3 +681,25 @@ button:focus:not(:focus-visible) {
     }
   }
 }
+@media (min-width: 1241px) and (max-width: 1400px) {
+  .header__main .header__main-inner { grid-template-columns: auto minmax(0, 1fr) 250px; gap: 22px; padding-inline: 25px; }
+  .header__main .header__menu > ul { gap: 20px; }
+  .header__main .header__logo { font-size: 26px; }
+}
+@media (max-width: 1240px) {
+  .header__main .header__main-inner { grid-template-columns: minmax(0, 1fr) auto; gap: 13px; padding: 16px 20px; min-height: auto; }
+  .header__main .header__mobile-toggle { display: inline-flex; align-items: center; justify-content: center; min-height: 42px; min-width: 42px; color: #a21726; border: 1px solid #e9dfd5; border-radius: 5px; margin-left: auto; }
+  .header__main .header__menu { display: none; width: 100%; grid-column: 1 / -1; justify-self: stretch; }
+  .header__main .header__menu.is-open { display: block; }
+  .header__main .header__menu > ul { flex-direction: column; gap: 0; padding: 5px 0; }
+  .header__main .header__menu > ul > li > a { display: block; padding: 10px 0; }
+  .header__main .header__menu .service-dropdown { display: none; }
+  .header__main .header__search { display: flex; grid-column: 1 / -1; max-width: none; height: 42px; }
+  .header__main .header__actions { grid-column: 1 / -1; width: 100%; }
+  .header__main .header__logo { font-size: 26px; }
+}
+
+
+.master-layout .hero .btn-3d { @include buttons.primary; }
+.master-layout .hero .btn-3d > .shadow, .master-layout .hero .btn-3d > .edge { display: none; }
+.master-layout .hero .btn-3d > .front { display: inline; padding: 0; background: transparent; color: inherit; font: inherit; transform: none; box-shadow: none; transition: none; }

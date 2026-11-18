@@ -8,6 +8,7 @@ class OrderItem extends Model {
   public quantity!: number;
   public price!: number;
   public subtotal!: number;
+  public selection!: any;
   public created_at!: Date;
 }
 
@@ -39,6 +40,7 @@ OrderItem.init(
       type: DataTypes.BIGINT,
       allowNull: false,
     },
+    selection: { type: DataTypes.JSON, allowNull: true },
     created_at: {
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,
